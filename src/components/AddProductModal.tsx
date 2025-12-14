@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,17 +8,28 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
+  Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+
+interface ProductForm {
+  brand: string;
+  name: string;
+  size: string;
+  cost: string;
+  image?: string;
+}
 
 interface AddProductModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (product: { brand: string; name: string; cost: number; image?: string }) => void;
+  onSubmit: (products: { brand: string; name: string; size: string; cost: number; image?: string }[]) => void;
   existingBrands: string[];
 }
 
-// Common Arabic perfume brands
+// Comprehensive list of Arabic and mainstream perfume brands
 const SUGGESTED_BRANDS = [
+  // Arabic Brands
   'Lattafa',
   'Armaf',
   'Rasasi',
@@ -34,69 +45,150 @@ const SUGGESTED_BRANDS = [
   'Zimaya',
   'Maison Alhambra',
   'Paris Corner',
+  'Anfar',
+  'Arabian Oud',
+  'Abdul Samad Al Qurashi',
+  'Hind Al Oud',
+  'Amouage',
+  'Kayali',
+  'Khadlaj',
+  'Al Wataniah',
+  'Junaid Jamshed',
+  'Al Zahra',
+  'Areej Al Ameerah',
+  'Hamidi',
+  'Anfasic Dokhoon',
+  'Ateej',
+  'Asdaaf',
+
+  // Mainstream Designer Brands
+  'Dior',
+  'Chanel',
+  'Versace',
+  'Paco Rabanne',
+  'Yves Saint Laurent',
+  'Giorgio Armani',
+  'Jean Paul Gaultier',
+  'Dolce & Gabbana',
+  'Tom Ford',
+  'Creed',
+  'Gucci',
+  'Prada',
+  'Burberry',
+  'Carolina Herrera',
+  'Calvin Klein',
+  'Hugo Boss',
+  'Givenchy',
+  'Hermès',
+  'Valentino',
+  'Bvlgari',
 ];
 
-export default function AddProductModal({ 
-  visible, 
-  onClose, 
-  onSubmit, 
+const SIZES = ['30ml', '50ml', '60ml', '75ml', '90ml', '100ml', '105ml', '125ml', '150ml', '200ml'];
+
+export default function AddProductModal({
+  visible,
+  onClose,
+  onSubmit,
   existingBrands,
 }: AddProductModalProps) {
-  const [brand, setBrand] = useState('');
-  const [name, setName] = useState('');
-  const [cost, setCost] = useState('');
-  const [image, setImage] = useState('');
-  const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [products, setProducts] = useState<ProductForm[]>([
+    { brand: '', name: '', size: '100ml', cost: '', image: undefined }
+  ]);
+  const [showBrandSuggestions, setShowBrandSuggestions] = useState(-1);
+  const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(null);
 
-  // Get brand suggestions
-  const getBrandSuggestions = () => {
+  const pickImage = async (index: number) => {
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (permissionResult.granted === false) {
+      Alert.alert('Permission Required', 'Please allow access to your photos to upload product images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      updateProduct(index, 'image', result.assets[0].uri);
+    }
+  };
+
+  const getBrandSuggestions = (brand: string) => {
     if (!brand) return [];
-    
+
     const query = brand.toLowerCase();
     const allBrands = [...new Set([...SUGGESTED_BRANDS, ...existingBrands])];
-    
-    const matches = allBrands.filter(b => b.toLowerCase().includes(query));
-    
-    // If no exact match, add "Create new brand" option
+
+    // Filter matches and sort alphabetically
+    const matches = allBrands
+      .filter(b => b.toLowerCase().includes(query))
+      .sort((a, b) => a.localeCompare(b));
+
     const hasExactMatch = allBrands.some(b => b.toLowerCase() === query);
     if (!hasExactMatch && brand.trim().length > 0) {
       return [...matches, `➕ Add new brand: "${brand}"`];
     }
-    
+
     return matches;
   };
 
+  const updateProduct = (index: number, field: keyof ProductForm, value: string) => {
+    const newProducts = [...products];
+    newProducts[index][field] = value as any;
+    setProducts(newProducts);
+  };
+
+  const addProduct = () => {
+    setProducts([...products, { brand: '', name: '', size: '100ml', cost: '', image: undefined }]);
+  };
+
+  const removeProduct = (index: number) => {
+    if (products.length === 1) {
+      Alert.alert('Error', 'You must have at least one product');
+      return;
+    }
+    setProducts(products.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = () => {
-    if (!brand.trim()) {
-      alert('Please enter a brand name');
-      return;
-    }
-    if (!name.trim()) {
-      alert('Please enter a product name');
-      return;
-    }
-    if (!cost || parseFloat(cost) <= 0) {
-      alert('Please enter a valid cost');
-      return;
+    // Validate all products
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      if (!product.brand.trim()) {
+        Alert.alert('Error', `Product ${i + 1}: Please enter a brand name`);
+        return;
+      }
+      if (!product.name.trim()) {
+        Alert.alert('Error', `Product ${i + 1}: Please enter a product name`);
+        return;
+      }
+      if (!product.cost || parseFloat(product.cost) <= 0) {
+        Alert.alert('Error', `Product ${i + 1}: Please enter a valid cost`);
+        return;
+      }
     }
 
-    onSubmit({
-      brand: brand.trim(),
-      name: name.trim(),
-      cost: parseFloat(cost),
-      image: image || undefined,
-    });
+    const formattedProducts = products.map(p => ({
+      brand: p.brand.trim(),
+      name: p.name.trim(),
+      size: p.size,
+      cost: parseFloat(p.cost),
+      image: p.image,
+    }));
 
+    onSubmit(formattedProducts);
     resetForm();
   };
 
   const resetForm = () => {
-    setBrand('');
-    setName('');
-    setCost('');
-    setImage('');
-    setShowBrandSuggestions(false);
+    setProducts([{ brand: '', name: '', size: '100ml', cost: '', image: undefined }]);
+    setShowBrandSuggestions(-1);
+    setSelectedProductIndex(null);
   };
 
   const handleCancel = () => {
@@ -104,150 +196,193 @@ export default function AddProductModal({
     onClose();
   };
 
-  const handleImageSelect = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (event: any) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Convert to base64 for display and storage
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const brandSuggestions = getBrandSuggestions();
-
   return (
     <Modal
       visible={visible}
       animationType="slide"
       transparent={false}
       onRequestClose={handleCancel}
+      presentationStyle="fullScreen"
     >
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleCancel}>
             <Text style={styles.cancelButton}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Add Product</Text>
+          <Text style={styles.title}>Add Products ({products.length})</Text>
           <TouchableOpacity onPress={handleSubmit}>
-            <Text style={styles.saveButton}>Save</Text>
+            <Text style={styles.saveButton}>Save All</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
-          {/* Image Upload - FIRST */}
-          <Text style={styles.sectionTitle}>Product Image (Optional)</Text>
-          <View style={styles.card}>
-            {image ? (
-              <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: image }} style={styles.imagePreview} />
-                <TouchableOpacity 
-                  style={styles.removeImageButton}
-                  onPress={() => setImage('')}
-                >
-                  <Text style={styles.removeImageText}>✕ Remove</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity 
-                style={styles.uploadButton}
-                onPress={handleImageSelect}
-              >
-                <Text style={styles.uploadIcon}>📷</Text>
-                <Text style={styles.uploadText}>Add Product Image</Text>
-                <Text style={styles.uploadSubtext}>Click to select from your device</Text>
-              </TouchableOpacity>
-            )}
-            {/* Hidden file input for web */}
-            <input
-              ref={fileInputRef as any}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-            />
-          </View>
+        <ScrollView
+          style={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {products.map((product, index) => {
+            const brandSuggestions = getBrandSuggestions(product.brand);
 
-          {/* Brand Input with Autocomplete */}
-          <Text style={styles.sectionTitle}>Brand</Text>
-          <View style={styles.card}>
-            <Text style={styles.label}>Brand Name *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Start typing brand name..."
-              value={brand}
-              onChangeText={(text) => {
-                setBrand(text);
-                setShowBrandSuggestions(text.length > 0);
-              }}
-              onFocus={() => setShowBrandSuggestions(brand.length > 0)}
-              onBlur={() => {
-                // Delay to allow click on suggestion
-                setTimeout(() => setShowBrandSuggestions(false), 200);
-              }}
-            />
-            
-            {showBrandSuggestions && brandSuggestions.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                {brandSuggestions.map((suggestion, index) => {
-                  const isCreateNew = suggestion.startsWith('➕');
-                  const displayText = isCreateNew ? suggestion : suggestion;
-                  const actualBrand = isCreateNew ? brand : suggestion;
-                  
-                  return (
+            return (
+              <View key={index} style={styles.productCard}>
+                <View style={styles.productHeader}>
+                  <Text style={styles.productNumber}>Product {index + 1}</Text>
+                  {products.length > 1 && (
+                    <TouchableOpacity onPress={() => removeProduct(index)}>
+                      <Text style={styles.removeButton}>✕ Remove</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Compact Image Section */}
+                <View style={styles.imageSection}>
+                  {product.image ? (
+                    <View style={styles.imageContainer}>
+                      <Image source={{ uri: product.image }} style={styles.productImage} />
+                      <TouchableOpacity
+                        style={styles.changeImageButton}
+                        onPress={() => pickImage(index)}
+                      >
+                        <Text style={styles.changeImageText}>Change</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={() => updateProduct(index, 'image', '')}
+                      >
+                        <Text style={styles.removeImageText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
                     <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.suggestionItem,
-                        isCreateNew && styles.createNewItem
-                      ]}
+                      style={styles.addImageButton}
+                      onPress={() => pickImage(index)}
+                    >
+                      <Text style={styles.imageIcon}>📷</Text>
+                      <Text style={styles.imageText}>Add Image</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Brand */}
+                <Text style={styles.label}>Brand *</Text>
+                {product.brand.trim() && showBrandSuggestions !== index ? (
+                  // Show selected brand
+                  <View style={styles.selectedBrandCard}>
+                    <Text style={styles.selectedBrandText}>{product.brand}</Text>
+                    <TouchableOpacity
+                      style={styles.editBrandButton}
                       onPress={() => {
-                        setBrand(actualBrand);
-                        setShowBrandSuggestions(false);
+                        updateProduct(index, 'brand', '');
+                        setShowBrandSuggestions(index);
                       }}
                     >
-                      <Text style={[
-                        styles.suggestionText,
-                        isCreateNew && styles.createNewText
-                      ]}>
-                        {displayText}
-                      </Text>
-                      {!isCreateNew && existingBrands.includes(suggestion) && (
-                        <Text style={styles.existingBadge}>✓ Existing</Text>
-                      )}
+                      <Text style={styles.editBrandButtonText}>Edit</Text>
                     </TouchableOpacity>
-                  );
-                })}
+                  </View>
+                ) : (
+                  <>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Start typing brand name..."
+                      value={product.brand}
+                      onChangeText={(text) => {
+                        updateProduct(index, 'brand', text);
+                        setShowBrandSuggestions(text.length > 0 ? index : -1);
+                      }}
+                      onFocus={() => setShowBrandSuggestions(index)}
+                      onBlur={() => setTimeout(() => setShowBrandSuggestions(-1), 300)}
+                    />
+
+                    {showBrandSuggestions === index && brandSuggestions.length > 0 && (
+                      <View style={styles.suggestionsContainer}>
+                        <ScrollView
+                          style={styles.suggestionsList}
+                          nestedScrollEnabled
+                          keyboardShouldPersistTaps="always"
+                        >
+                          {brandSuggestions.map((suggestion, sugIndex) => {
+                            const isCreateNew = suggestion.startsWith('➕');
+                            const actualBrand = isCreateNew ? product.brand : suggestion;
+
+                            return (
+                              <TouchableOpacity
+                                key={sugIndex}
+                                style={[
+                                  styles.suggestionItem,
+                                  isCreateNew && styles.createNewItem
+                                ]}
+                                onPress={() => {
+                                  updateProduct(index, 'brand', actualBrand);
+                                  setShowBrandSuggestions(-1);
+                                }}
+                              >
+                                <Text style={[
+                                  styles.suggestionText,
+                                  isCreateNew && styles.createNewText
+                                ]}>
+                                  {suggestion}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {/* Product Name */}
+                <Text style={styles.label}>Product Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter product name..."
+                  value={product.name}
+                  onChangeText={(text) => updateProduct(index, 'name', text)}
+                />
+
+                {/* Size Selector */}
+                <Text style={styles.label}>Size *</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.sizeScrollContainer}
+                >
+                  {SIZES.map(size => (
+                    <TouchableOpacity
+                      key={size}
+                      style={[
+                        styles.sizeChip,
+                        product.size === size && styles.sizeChipActive
+                      ]}
+                      onPress={() => updateProduct(index, 'size', size)}
+                    >
+                      <Text style={[
+                        styles.sizeChipText,
+                        product.size === size && styles.sizeChipTextActive
+                      ]}>
+                        {size}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                {/* Unit Cost */}
+                <Text style={styles.label}>Unit Cost ($) *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  value={product.cost}
+                  onChangeText={(text) => updateProduct(index, 'cost', text)}
+                  keyboardType="decimal-pad"
+                />
               </View>
-            )}
-          </View>
+            );
+          })}
 
-          {/* Product Name - Simple text input */}
-          <Text style={styles.sectionTitle}>Product Details</Text>
-          <View style={styles.card}>
-            <Text style={styles.label}>Product Name *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter product name..."
-              value={name}
-              onChangeText={setName}
-            />
-
-            <Text style={styles.label}>Unit Cost ($) *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0.00"
-              value={cost}
-              onChangeText={setCost}
-              keyboardType="decimal-pad"
-            />
-          </View>
+          {/* Add Another Product Button */}
+          <TouchableOpacity style={styles.addProductButton} onPress={addProduct}>
+            <Text style={styles.addProductButtonText}>+ Add Another Product</Text>
+          </TouchableOpacity>
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
@@ -287,54 +422,119 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 12,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-    marginTop: 8,
-  },
-  card: {
+  productCard: {
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    padding: 14,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  label: {
+  productHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  productNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  removeButton: {
     fontSize: 14,
+    color: '#FF3B30',
+    fontWeight: '600',
+  },
+  imageSection: {
+    marginBottom: 12,
+  },
+  imageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  productImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+  },
+  changeImageButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  changeImageText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  removeImageButton: {
+    backgroundColor: '#FF3B30',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeImageText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  addImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+  },
+  imageIcon: {
+    fontSize: 24,
+    marginRight: 8,
+  },
+  imageText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  label: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 8,
-    marginTop: 12,
+    marginBottom: 6,
+    marginTop: 8,
   },
   input: {
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    padding: 10,
+    fontSize: 15,
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
   suggestionsContainer: {
-    marginTop: 8,
+    marginTop: 6,
     backgroundColor: 'white',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    maxHeight: 200,
+    maxHeight: 150,
+  },
+  suggestionsList: {
+    maxHeight: 150,
   },
   suggestionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
+    padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -342,62 +542,83 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9',
   },
   suggestionText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#333',
   },
   createNewText: {
     color: '#2E7D32',
     fontWeight: '600',
   },
-  existingBadge: {
-    fontSize: 12,
-    color: '#34C759',
-    fontWeight: '600',
+  sizeScrollContainer: {
+    flexDirection: 'row',
+    paddingRight: 10,
+    paddingVertical: 4,
   },
-  uploadButton: {
+  sizeChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
     backgroundColor: '#f0f0f0',
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    borderWidth: 2,
+    marginRight: 6,
+    borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  sizeChipActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  sizeChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  sizeChipTextActive: {
+    color: 'white',
+  },
+  addProductButton: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#34C759',
     borderStyle: 'dashed',
   },
-  uploadIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  uploadText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  uploadSubtext: {
-    fontSize: 14,
-    color: '#999',
-  },
-  imagePreviewContainer: {
-    alignItems: 'center',
-  },
-  imagePreview: {
-    width: 200,
-    height: 200,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  removeImageButton: {
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  removeImageText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
+  addProductButtonText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#34C759',
   },
   bottomSpacer: {
     height: 40,
+  },
+  selectedBrandCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#D4EDDA',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  selectedBrandText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#155724',
+    flex: 1,
+    marginRight: 8,
+  },
+  editBrandButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  editBrandButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

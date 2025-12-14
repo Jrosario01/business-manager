@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,35 +7,68 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  Image,
+  Alert,
 } from 'react-native';
+import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
+import { useSalesStore } from '../store/salesStore';
 
 interface AddCustomerModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (customer: { name: string; phone: string; wishlist: string[] }) => void;
-  catalogProducts: Array<{ brand: string; name: string }>;
+  initialData?: {
+    name: string;
+    phone: string;
+    wishlist: string[];
+  };
+  customerId?: string;
+  isEdit?: boolean;
+  onDelete?: () => void;
 }
 
-export default function AddCustomerModal({ visible, onClose, onSubmit, catalogProducts }: AddCustomerModalProps) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+export default function AddCustomerModal({ visible, onClose, onSubmit, initialData, customerId, isEdit = false, onDelete }: AddCustomerModalProps) {
+  const { products: catalogProducts, searchProducts, loadProducts } = useProductsStore();
+  const { sales } = useSalesStore();
+  const [name, setName] = useState(initialData?.name || '');
+  const [phone, setPhone] = useState(initialData?.phone || '');
   const [wishlistInput, setWishlistInput] = useState('');
-  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [wishlist, setWishlist] = useState<string[]>(initialData?.wishlist || []);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Get customer's purchase history
+  const customerSales = isEdit && customerId
+    ? sales.filter(sale => sale.customerName === initialData?.name).sort((a, b) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      )
+    : [];
+
+  // Load products when modal becomes visible
+  useEffect(() => {
+    if (visible && catalogProducts.length === 0) {
+      loadProducts();
+    }
+  }, [visible]);
+
+  // Update state when initialData changes (for edit mode)
+  useEffect(() => {
+    if (initialData) {
+      setName(initialData.name);
+      setPhone(initialData.phone);
+      setWishlist(initialData.wishlist);
+    }
+  }, [initialData]);
+
   // Get product suggestions from catalog
-  const getProductSuggestions = () => {
-    if (!wishlistInput) return [];
-    
-    const query = wishlistInput.toLowerCase();
-    
-    return catalogProducts
-      .filter(p => {
-        const fullName = `${p.name} by ${p.brand}`.toLowerCase();
-        return fullName.includes(query) && !wishlist.includes(`${p.brand} ${p.name}`);
-      })
-      .slice(0, 10) // Limit to 10 suggestions
-      .map(p => `${p.name} by ${p.brand}`);
+  const getProductSuggestions = (): CatalogProduct[] => {
+    if (!wishlistInput || wishlistInput.length < 2) return [];
+
+    const results = searchProducts(wishlistInput);
+    // Filter out already added products
+    return results.filter(p => {
+      const productString = `${p.brand} ${p.name}`;
+      return !wishlist.includes(productString);
+    }).slice(0, 10);
   };
 
   const handleSubmit = () => {
@@ -70,12 +103,33 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, catalogPr
     onClose();
   };
 
-  const addToWishlist = (productName: string) => {
-    if (productName.trim() && !wishlist.includes(productName.trim())) {
-      setWishlist([...wishlist, productName.trim()]);
+  const addToWishlist = (product: CatalogProduct) => {
+    const productString = `${product.brand} ${product.name}`;
+    if (!wishlist.includes(productString)) {
+      setWishlist([...wishlist, productString]);
       setWishlistInput('');
       setShowSuggestions(false);
     }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Customer',
+      'Are you sure you want to delete this customer? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            if (onDelete) {
+              onDelete();
+              resetForm();
+            }
+          },
+        },
+      ]
+    );
   };
 
   const removeFromWishlist = (index: number) => {
@@ -113,7 +167,7 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, catalogPr
           <TouchableOpacity onPress={handleCancel}>
             <Text style={styles.cancelButton}>Cancel</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Add Customer</Text>
+          <Text style={styles.title}>{isEdit ? 'Edit Customer' : 'Add Customer'}</Text>
           <TouchableOpacity onPress={handleSubmit}>
             <Text style={styles.saveButton}>Save</Text>
           </TouchableOpacity>
@@ -165,15 +219,37 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, catalogPr
 
             {showSuggestions && suggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
-                {suggestions.map((suggestion, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.suggestionItem}
-                    onPress={() => addToWishlist(suggestion)}
-                  >
-                    <Text style={styles.suggestionText}>{suggestion}</Text>
-                  </TouchableOpacity>
-                ))}
+                <ScrollView style={styles.suggestionsList} nestedScrollEnabled keyboardShouldPersistTaps="always">
+                  {suggestions.map((product) => (
+                    <TouchableOpacity
+                      key={product.id}
+                      style={styles.suggestionItem}
+                      onPress={() => addToWishlist(product)}
+                      activeOpacity={0.7}
+                    >
+                      <View pointerEvents="none" style={styles.suggestionContent}>
+                        {product.image ? (
+                          <Image
+                            source={{ uri: product.image }}
+                            style={styles.suggestionImage}
+                          />
+                        ) : (
+                          <View style={styles.suggestionImagePlaceholder}>
+                            <Text style={styles.suggestionImagePlaceholderText}>📦</Text>
+                          </View>
+                        )}
+                        <View style={styles.suggestionTextContainer}>
+                          <Text style={styles.suggestionText}>
+                            {product.brand} - {product.name}
+                          </Text>
+                          <Text style={styles.suggestionMeta}>
+                            {product.size} • ${product.cost}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </View>
             )}
 
@@ -208,6 +284,44 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, catalogPr
               💡 Balance and purchase history will be tracked automatically when you make sales to this customer.
             </Text>
           </View>
+
+          {/* Purchase History */}
+          {isEdit && customerSales.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>Purchase History</Text>
+              <View style={styles.card}>
+                {customerSales.map((sale, index) => (
+                  <View key={sale.id} style={[styles.historyItem, index > 0 && styles.historyItemBorder]}>
+                    <View style={styles.historyHeader}>
+                      <Text style={styles.historyDate}>
+                        {new Date(sale.date).toLocaleDateString()} • {new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                      <Text style={styles.historyAmount}>${sale.totalRevenue.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.historyProducts}>
+                      {sale.products.map((product, pIndex) => (
+                        <Text key={pIndex} style={styles.historyProduct}>
+                          • {product.quantity}× {product.brand} {product.name}
+                        </Text>
+                      ))}
+                    </View>
+                    <View style={styles.historyFooter}>
+                      <Text style={[styles.historyStatus, sale.paymentStatus === 'paid' ? styles.historyStatusPaid : styles.historyStatusDue]}>
+                        {sale.paymentStatus === 'paid' ? '✓ Paid' : `Due: $${(sale.totalRevenue - sale.amountPaid).toFixed(2)}`}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* Delete Button */}
+          {isEdit && onDelete && (
+            <TouchableOpacity onPress={handleDelete} style={styles.deleteButtonBottom}>
+              <Text style={styles.deleteButtonText}>Delete Customer</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
@@ -244,6 +358,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#34C759',
     fontWeight: '600',
+  },
+  deleteButtonBottom: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 20,
+    marginHorizontal: 4,
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  historyItem: {
+    paddingVertical: 12,
+  },
+  historyItemBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    marginTop: 12,
+    paddingTop: 12,
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  historyDate: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '600',
+  },
+  historyAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  historyProducts: {
+    marginBottom: 8,
+  },
+  historyProduct: {
+    fontSize: 13,
+    color: '#333',
+    marginBottom: 3,
+  },
+  historyFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  historyStatus: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  historyStatusPaid: {
+    color: '#34C759',
+  },
+  historyStatusDue: {
+    color: '#FF3B30',
   },
   content: {
     flex: 1,
@@ -292,17 +466,55 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    maxHeight: 200,
+    borderColor: '#007AFF',
+    maxHeight: 250,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  suggestionsList: {
+    maxHeight: 250,
   },
   suggestionItem: {
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  suggestionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  suggestionImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+  },
+  suggestionImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  suggestionImagePlaceholderText: {
+    fontSize: 24,
+  },
+  suggestionTextContainer: {
+    flex: 1,
+  },
   suggestionText: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '600',
     color: '#333',
+    marginBottom: 2,
+  },
+  suggestionMeta: {
+    fontSize: 13,
+    color: '#666',
   },
   noResults: {
     marginTop: 8,

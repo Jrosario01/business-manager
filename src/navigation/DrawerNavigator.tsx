@@ -6,10 +6,10 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 // Import screens
 import InventoryScreen from '../screens/InventoryScreen';
-import ShipmentsListScreen from '../screens/ShipmentsListScreen';
+import ShipmentsScreen from '../screens/ShipmentsScreen';
 import SalesScreen from '../screens/SalesScreen';
 import CustomersScreen from '../screens/CustomersScreen';
-import DashboardScreen from '../screens/DashboardScreen';
+import ReportsScreen from '../screens/ReportsScreen';
 import CatalogScreen from '../screens/CatalogScreen';
 
 
@@ -87,7 +87,7 @@ export default function DrawerNavigator() {
 
       <Drawer.Screen
         name="Shipments"
-        component={ShipmentsListScreen}
+        component={ShipmentsScreen}
         options={{
           drawerLabel: '📦 Shipments',
           title: 'Shipments',
@@ -111,9 +111,9 @@ export default function DrawerNavigator() {
       />
       <Drawer.Screen
         name="Reports"
-        component={DashboardScreen}
+        component={ReportsScreen}
         options={{
-          drawerLabel: '�� Reports',
+          drawerLabel: '📊 Reports',
           title: 'Reports & Analytics',
         }}
       />

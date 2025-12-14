@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,43 +7,48 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import AddProductModal from '../components/AddProductModal';
-
-interface CatalogProduct {
-  id: string;
-  brand: string;
-  name: string;
-  cost: number;
-  image?: string;
-}
-
-// Initial Arabic perfume brands data
-const initialProducts: CatalogProduct[] = [
-  { id: '1', brand: 'Lattafa', name: 'Asad', cost: 25 },
-  { id: '2', brand: 'Lattafa', name: 'Bade Al Oud', cost: 30 },
-  { id: '3', brand: 'Lattafa', name: 'Fakhar', cost: 22 },
-  { id: '4', brand: 'Armaf', name: 'Club De Nuit Intense', cost: 35 },
-  { id: '5', brand: 'Armaf', name: 'Tres Nuit', cost: 28 },
-  { id: '6', brand: 'Rasasi', name: 'Hawas', cost: 32 },
-  { id: '7', brand: 'Rasasi', name: 'Fattan', cost: 27 },
-  { id: '8', brand: 'Al Haramain', name: 'L\'Aventure', cost: 30 },
-  { id: '9', brand: 'Al Haramain', name: 'Amber Oud', cost: 35 },
-  { id: '10', brand: 'Afnan', name: 'Supremacy Silver', cost: 29 },
-  { id: '11', brand: 'Afnan', name: '9PM', cost: 26 },
-];
+import EditProductModal from '../components/EditProductModal';
+import { useProductsStore, Product } from '../store/productsStore';
 
 export default function CatalogScreen() {
-  const [products, setProducts] = useState<CatalogProduct[]>(initialProducts);
+  const {
+    products,
+    isLoading,
+    loadProducts,
+    addProducts,
+    updateProduct,
+    deleteProduct,
+    getBrands,
+  } = useProductsStore();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setWindowWidth(window.width);
+    });
+    return () => subscription?.remove();
+  }, []);
 
   // Filter products
   const filteredProducts = products.filter(product => {
     const query = searchQuery.toLowerCase();
     return (
       product.brand.toLowerCase().includes(query) ||
-      product.name.toLowerCase().includes(query)
+      product.name.toLowerCase().includes(query) ||
+      product.size.toLowerCase().includes(query)
     );
   });
 
@@ -54,96 +59,148 @@ export default function CatalogScreen() {
     }
     acc[product.brand].push(product);
     return acc;
-  }, {} as Record<string, CatalogProduct[]>);
+  }, {} as Record<string, Product[]>);
 
   const brands = Object.keys(productsByBrand).sort();
 
-  const renderProduct = (product: CatalogProduct) => (
-    <View key={product.id} style={styles.productRow}>
-      <View style={styles.productImageContainer}>
-        {product.image ? (
-          <Image source={{ uri: product.image }} style={styles.productImage} />
-        ) : (
-          <View style={styles.placeholderImage}>
-            <Text style={styles.placeholderText}>📦</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.productInfo}>
-  <Text style={styles.productName}>{product.name} by {product.brand}</Text>
-</View>
-      <View style={styles.productCost}>
-        <Text style={styles.costLabel}>Unit Cost</Text>
-        <Text style={styles.costValue}>${product.cost}</Text>
-      </View>
-    </View>
-  );
-
-  const renderBrandSection = (brand: string) => (
-    <View key={brand} style={styles.brandSection}>
-      <View style={styles.brandHeader}>
-        <Text style={styles.brandTitle}>{brand}</Text>
-        <Text style={styles.brandCount}>
-          {productsByBrand[brand].length} product{productsByBrand[brand].length !== 1 ? 's' : ''}
-        </Text>
-      </View>
-      {productsByBrand[brand].map(renderProduct)}
-    </View>
-  );
-
-  const handleAddProduct = (product: { brand: string; name: string; cost: number; image?: string }) => {
-  const newProduct = {
-    id: Date.now().toString(),
-    ...product,
+  const handleProductPress = (product: Product) => {
+    setSelectedProduct(product);
+    setIsEditModalVisible(true);
   };
-  setProducts([...products, newProduct]);
-  setIsAddModalVisible(false);
-};
 
-const existingBrands = [...new Set(products.map(p => p.brand))];
+  const renderProduct = (product: Product) => {
+    const isCompact = windowWidth < 380;
+
+    return (
+      <TouchableOpacity
+        key={product.id}
+        style={[styles.productRow, isCompact && styles.productRowCompact]}
+        onPress={() => handleProductPress(product)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.productImageContainer, isCompact && styles.productImageCompact]}>
+          {product.image ? (
+            <Image source={{ uri: product.image }} style={styles.productImage} />
+          ) : (
+            <View style={styles.placeholderImage}>
+              <Text style={styles.placeholderText}>📦</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.productInfo}>
+          <View style={styles.nameRow}>
+            <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
+            <Text style={styles.productSize}>{product.size}</Text>
+          </View>
+          <Text style={styles.productBrand}>{product.brand}</Text>
+        </View>
+        <View style={styles.productCost}>
+          <Text style={styles.costLabel}>Cost</Text>
+          <Text style={styles.costValue}>${product.cost}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderBrandSection = (brand: string) => {
+    const isCompact = windowWidth < 380;
+    return (
+      <View key={brand} style={styles.brandSection}>
+        <View style={styles.brandHeader}>
+          <Text style={[styles.brandTitle, isCompact && styles.brandTitleCompact]}>{brand}</Text>
+          <Text style={styles.brandCount}>
+            {productsByBrand[brand].length}
+          </Text>
+        </View>
+        {productsByBrand[brand].map(renderProduct)}
+      </View>
+    );
+  };
+
+  const handleAddProduct = async (newProductsList: { brand: string; name: string; size: string; cost: number; image?: string }[]) => {
+    await addProducts(newProductsList);
+    setIsAddModalVisible(false);
+  };
+
+  const handleEditProduct = async (updatedProduct: { id: string; brand: string; name: string; size: string; cost: number; image?: string }) => {
+    const { id, ...productData } = updatedProduct;
+    await updateProduct(id, productData);
+    setIsEditModalVisible(false);
+    setSelectedProduct(null);
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    await deleteProduct(id);
+    setIsEditModalVisible(false);
+    setSelectedProduct(null);
+  };
+
+  const existingBrands = getBrands();
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading products...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Header with Search and Add Button */}
+      {/* Compact header with search, stats and add button */}
       <View style={styles.header}>
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by brand or product..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity 
-              onPress={() => setSearchQuery('')}
-              style={styles.clearButton}
-            >
-              <Text style={styles.clearButtonText}>✕</Text>
-            </TouchableOpacity>
-          )}
+        <View style={styles.searchRow}>
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search products..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholderTextColor="#999"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={styles.clearButton}
+              >
+                <Text style={styles.clearButtonText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => setIsAddModalVisible(true)}
-        >
-          <Text style={styles.addButtonText}>+ Add Product</Text>
-        </TouchableOpacity>
+        
+        <View style={styles.actionRow}>
+          <Text style={styles.statsText}>
+            {filteredProducts.length} products • {brands.length} brands
+          </Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setIsAddModalVisible(true)}
+          >
+            <Text style={styles.addButtonText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Stats Bar */}
-      <View style={styles.statsBar}>
-        <Text style={styles.statsText}>
-          {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} • {brands.length} brand{brands.length !== 1 ? 's' : ''}
-        </Text>
-      </View>
+      <AddProductModal
+        visible={isAddModalVisible}
+        onClose={() => setIsAddModalVisible(false)}
+        onSubmit={handleAddProduct}
+        existingBrands={existingBrands}
+      />
 
-     <AddProductModal
-  visible={isAddModalVisible}
-  onClose={() => setIsAddModalVisible(false)}
-  onSubmit={handleAddProduct}
-  existingBrands={existingBrands}
-/>
+      <EditProductModal
+        visible={isEditModalVisible}
+        onClose={() => {
+          setIsEditModalVisible(false);
+          setSelectedProduct(null);
+        }}
+        onSubmit={handleEditProduct}
+        onDelete={handleDeleteProduct}
+        product={selectedProduct}
+        existingBrands={existingBrands}
+      />
 
       {/* Product List */}
       <FlatList
@@ -173,21 +230,23 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: 'white',
-    padding: 15,
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+  },
+  searchRow: {
+    marginBottom: 10,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
   },
   searchInput: {
     flex: 1,
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    padding: 10,
+    fontSize: 15,
   },
   clearButton: {
     marginLeft: 10,
@@ -197,52 +256,63 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#999',
   },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statsText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+    flex: 1,
+  },
   addButton: {
     backgroundColor: '#34C759',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
-    alignItems: 'center',
   },
   addButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
-  statsBar: {
-    padding: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  statsText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
   listContent: {
-    padding: 15,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   brandSection: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   brandHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 8,
+    marginBottom: 10,
+    paddingBottom: 6,
     borderBottomWidth: 2,
     borderBottomColor: '#007AFF',
   },
   brandTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#007AFF',
+    flex: 1,
+  },
+  brandTitleCompact: {
+    fontSize: 16,
   },
   brandCount: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
+    fontWeight: '600',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 28,
+    textAlign: 'center',
   },
   productRow: {
     flexDirection: 'row',
@@ -257,50 +327,74 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  productRowCompact: {
+    padding: 10,
+  },
   productImageContainer: {
     marginRight: 12,
+  },
+  productImageCompact: {
+    marginRight: 10,
   },
   productImage: {
     width: 60,
     height: 60,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   placeholderImage: {
     width: 60,
     height: 60,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#f0f0f0',
     justifyContent: 'center',
     alignItems: 'center',
   },
   placeholderText: {
-    fontSize: 30,
+    fontSize: 28,
   },
   productInfo: {
     flex: 1,
+    minWidth: 0,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+    flexWrap: 'wrap',
+  },
+  productName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    flexShrink: 1,
+  },
+  productSize: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   productBrand: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#007AFF',
     textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  productName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
   },
   productCost: {
     alignItems: 'flex-end',
+    marginLeft: 8,
   },
   costLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#999',
     marginBottom: 2,
   },
   costValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#34C759',
   },
@@ -309,14 +403,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#666',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#999',
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
 });

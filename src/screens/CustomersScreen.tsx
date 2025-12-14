@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,104 +6,127 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import AddCustomerModal from '../components/AddCustomerModal';
-
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  balance: number;
-  wishlist: string[];
-  totalPurchases: number;
-  lastPurchase?: string;
-}
-
-// Dummy customers
-const initialCustomers: Customer[] = [
-  {
-    id: '1',
-    name: 'Juan Perez',
-    phone: '809-555-0101',
-    balance: -150,
-    wishlist: ['Lattafa Asad', 'Armaf Club De Nuit'],
-    totalPurchases: 450,
-    lastPurchase: '2024-12-05',
-  },
-  {
-    id: '2',
-    name: 'Maria Rodriguez',
-    phone: '809-555-0102',
-    balance: 0,
-    wishlist: ['Rasasi Hawas'],
-    totalPurchases: 320,
-    lastPurchase: '2024-12-01',
-  },
-  {
-    id: '3',
-    name: 'Carlos Gomez',
-    phone: '829-555-0103',
-    balance: -75,
-    wishlist: [],
-    totalPurchases: 180,
-    lastPurchase: '2024-11-28',
-  },
-  {
-    id: '4',
-    name: 'Ana Martinez',
-    phone: '849-555-0104',
-    balance: -200,
-    wishlist: ['Al Haramain Amber Oud', 'Afnan 9PM'],
-    totalPurchases: 890,
-    lastPurchase: '2024-12-08',
-  },
-];
+import { useCustomersStore, Customer } from '../store/customersStore';
+import { useSalesStore } from '../store/salesStore';
 
 export default function CustomersScreen() {
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
+  const { customers, loadCustomers, addCustomer, updateCustomer, deleteCustomer } = useCustomersStore();
+  const { sales, loadSales } = useSalesStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'owes' | 'wishlist'>('all');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
 
-  const handleAddCustomer = (customerData: { name: string; phone: string; wishlist: string[] }) => {
-    const newCustomer = {
-      id: Date.now().toString(),
+  useEffect(() => {
+    loadCustomers();
+    loadSales();
+
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setWindowWidth(window.width);
+    });
+    return () => subscription?.remove();
+  }, []);
+
+  const handleCustomerPress = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setIsEditModalVisible(true);
+  };
+
+  const handleUpdateCustomer = async (updatedData: { name: string; phone: string; wishlist: string[] }) => {
+    if (!selectedCustomer) return;
+
+    await updateCustomer(selectedCustomer.id, {
+      ...updatedData,
+      balance: selectedCustomer.balance,
+      totalPurchases: selectedCustomer.totalPurchases,
+      lastPurchase: selectedCustomer.lastPurchase,
+    });
+    setIsEditModalVisible(false);
+    setSelectedCustomer(null);
+  };
+
+  const handleAddCustomer = async (customerData: { name: string; phone: string; wishlist: string[] }) => {
+    await addCustomer({
       ...customerData,
       balance: 0,
       totalPurchases: 0,
-    };
-    setCustomers([...customers, newCustomer]);
+    });
     setIsAddModalVisible(false);
   };
 
+  const handleDeleteCustomer = async () => {
+    if (!selectedCustomer) return;
+    await deleteCustomer(selectedCustomer.id);
+    setIsEditModalVisible(false);
+    setSelectedCustomer(null);
+  };
+
+  // Calculate actual customer stats from sales
+  const getCustomerStats = (customerName: string) => {
+    const customerSales = sales.filter(sale => sale.customerName === customerName);
+    const totalPurchases = customerSales.reduce((sum, sale) => sum + sale.totalRevenue, 0);
+    const totalPaid = customerSales.reduce((sum, sale) => sum + sale.amountPaid, 0);
+    const actualBalance = totalPurchases - totalPaid;
+    const lastSale = customerSales.length > 0
+      ? customerSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+      : null;
+
+    return {
+      totalPurchases,
+      balance: actualBalance > 0 ? -actualBalance : 0, // Negative means they owe
+      lastPurchase: lastSale?.date,
+    };
+  };
+
   // Filter customers
-  const filteredCustomers = customers.filter(customer => {
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = 
-      customer.name.toLowerCase().includes(query) ||
-      customer.phone.includes(query);
+  const filteredCustomers = customers
+    .filter(customer => {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch =
+        customer.name.toLowerCase().includes(query) ||
+        customer.phone.includes(query);
 
-    if (!matchesSearch) return false;
+      if (!matchesSearch) return false;
 
-    if (filterType === 'owes') {
-      return customer.balance < 0;
-    }
-    if (filterType === 'wishlist') {
-      return customer.wishlist.length > 0;
-    }
+      if (filterType === 'owes') {
+        const stats = getCustomerStats(customer.name);
+        return stats.balance < 0;
+      }
+      if (filterType === 'wishlist') {
+        return customer.wishlist.length > 0;
+      }
 
-    return true;
-  });
+      return true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically by name
 
-  const totalOwed = customers.reduce((sum, c) => sum + (c.balance < 0 ? Math.abs(c.balance) : 0), 0);
-  const customersWithBalance = customers.filter(c => c.balance < 0).length;
+  // Calculate total owed from actual sales data
+  const totalOwed = customers.reduce((sum, c) => {
+    const stats = getCustomerStats(c.name);
+    return sum + (stats.balance < 0 ? Math.abs(stats.balance) : 0);
+  }, 0);
+  const customersWithBalance = customers.filter(c => {
+    const stats = getCustomerStats(c.name);
+    return stats.balance < 0;
+  }).length;
 
   const renderCustomer = ({ item }: { item: Customer }) => {
-    const owes = item.balance < 0;
-    const oweAmount = Math.abs(item.balance);
+    const stats = getCustomerStats(item.name);
+    const owes = stats.balance < 0;
+    const oweAmount = Math.abs(stats.balance);
+    const isCompact = windowWidth < 380;
 
     return (
-      <TouchableOpacity style={styles.customerCard}>
+      <TouchableOpacity
+        style={[styles.customerCard, isCompact && styles.customerCardCompact]}
+        onPress={() => handleCustomerPress(item)}
+        activeOpacity={0.7}
+      >
         <View style={styles.customerHeader}>
           <View style={styles.customerAvatar}>
             <Text style={styles.avatarText}>
@@ -121,17 +144,17 @@ export default function CustomersScreen() {
           )}
         </View>
 
-        <View style={styles.customerStats}>
+        <View style={[styles.customerStats, isCompact && styles.customerStatsCompact]}>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Total Purchases</Text>
-            <Text style={styles.statValue}>${item.totalPurchases}</Text>
+            <Text style={styles.statLabel}>Purchases</Text>
+            <Text style={styles.statValue}>${stats.totalPurchases.toFixed(2)}</Text>
           </View>
-          
+
           {owes && (
             <View style={[styles.statBox, styles.balanceBox]}>
-              <Text style={styles.statLabel}>Balance Owed</Text>
+              <Text style={styles.statLabel}>Owes</Text>
               <Text style={[styles.statValue, styles.balanceValue]}>
-                ${oweAmount}
+                ${oweAmount.toFixed(2)}
               </Text>
             </View>
           )}
@@ -140,7 +163,7 @@ export default function CustomersScreen() {
             <View style={[styles.statBox, styles.wishlistBox]}>
               <Text style={styles.statLabel}>Wishlist</Text>
               <Text style={styles.wishlistCount}>
-                {item.wishlist.length} item{item.wishlist.length !== 1 ? 's' : ''}
+                {item.wishlist.length}
               </Text>
             </View>
           )}
@@ -157,9 +180,9 @@ export default function CustomersScreen() {
           </View>
         )}
 
-        {item.lastPurchase && (
+        {stats.lastPurchase && (
           <Text style={styles.lastPurchase}>
-            Last purchase: {new Date(item.lastPurchase).toLocaleDateString()}
+            Last purchase: {new Date(stats.lastPurchase).toLocaleDateString()}
           </Text>
         )}
       </TouchableOpacity>
@@ -174,67 +197,59 @@ export default function CustomersScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search by name or phone..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity 
-            onPress={() => setSearchQuery('')}
-            style={styles.clearButton}
-          >
-            <Text style={styles.clearButtonText}>✕</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={styles.filtersContainer}>
-        {filterButtons.map(filter => (
-          <TouchableOpacity
-            key={filter.value}
-            style={[
-              styles.filterChip,
-              filterType === filter.value && styles.filterChipActive
-            ]}
-            onPress={() => setFilterType(filter.value)}
-          >
-            <Text style={[
-              styles.filterChipText,
-              filterType === filter.value && styles.filterChipTextActive
-            ]}>
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.statsBar}>
-        <View style={styles.statItem}>
-          <Text style={styles.statItemValue}>{filteredCustomers.length}</Text>
-          <Text style={styles.statItemLabel}>Customer{filteredCustomers.length !== 1 ? 's' : ''}</Text>
+      {/* Combined header with search and filters */}
+      <View style={styles.header}>
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search customers..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#999"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              style={styles.clearButton}
+            >
+              <Text style={styles.clearButtonText}>✕</Text>
+            </TouchableOpacity>
+          )}
         </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={[styles.statItemValue, styles.owedValue]}>${totalOwed}</Text>
-          <Text style={styles.statItemLabel}>Total Owed</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statItemValue}>{customersWithBalance}</Text>
-          <Text style={styles.statItemLabel}>With Balance</Text>
+
+        <View style={styles.filtersContainer}>
+          {filterButtons.map(filter => (
+            <TouchableOpacity
+              key={filter.value}
+              style={[
+                styles.filterChip,
+                filterType === filter.value && styles.filterChipActive
+              ]}
+              onPress={() => setFilterType(filter.value)}
+            >
+              <Text style={[
+                styles.filterChipText,
+                filterType === filter.value && styles.filterChipTextActive
+              ]}>
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
-      <View style={styles.addButtonContainer}>
-        <TouchableOpacity 
+      {/* Compact stats and add button */}
+      <View style={styles.actionBar}>
+        <View style={styles.statsCompact}>
+          <Text style={styles.statsCompactText}>
+            {filteredCustomers.length} customers • ${totalOwed} owed • {customersWithBalance} with balance
+          </Text>
+        </View>
+        <TouchableOpacity
           style={styles.addButton}
           onPress={() => setIsAddModalVisible(true)}
         >
-          <Text style={styles.addButtonText}>+ Add Customer</Text>
+          <Text style={styles.addButtonText}>+ Add</Text>
         </TouchableOpacity>
       </View>
 
@@ -254,23 +269,29 @@ export default function CustomersScreen() {
       />
 
       <AddCustomerModal
-  visible={isAddModalVisible}
-  onClose={() => setIsAddModalVisible(false)}
-  onSubmit={handleAddCustomer}
-  catalogProducts={[
-    { brand: 'Lattafa', name: 'Asad' },
-    { brand: 'Lattafa', name: 'Bade Al Oud' },
-    { brand: 'Lattafa', name: 'Fakhar' },
-    { brand: 'Armaf', name: 'Club De Nuit Intense' },
-    { brand: 'Armaf', name: 'Tres Nuit' },
-    { brand: 'Rasasi', name: 'Hawas' },
-    { brand: 'Rasasi', name: 'Fattan' },
-    { brand: 'Al Haramain', name: 'L\'Aventure' },
-    { brand: 'Al Haramain', name: 'Amber Oud' },
-    { brand: 'Afnan', name: 'Supremacy Silver' },
-    { brand: 'Afnan', name: '9PM' },
-  ]}
-/>
+        visible={isAddModalVisible}
+        onClose={() => setIsAddModalVisible(false)}
+        onSubmit={handleAddCustomer}
+      />
+
+      {selectedCustomer && (
+        <AddCustomerModal
+          visible={isEditModalVisible}
+          onClose={() => {
+            setIsEditModalVisible(false);
+            setSelectedCustomer(null);
+          }}
+          onSubmit={handleUpdateCustomer}
+          initialData={{
+            name: selectedCustomer.name,
+            phone: selectedCustomer.phone,
+            wishlist: selectedCustomer.wishlist,
+          }}
+          customerId={selectedCustomer.id}
+          isEdit={true}
+          onDelete={handleDeleteCustomer}
+        />
+      )}
     </View>
   );
 }
@@ -280,20 +301,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  header: {
+    backgroundColor: 'white',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    marginBottom: 10,
   },
   searchInput: {
     flex: 1,
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    padding: 10,
+    fontSize: 15,
   },
   clearButton: {
     marginLeft: 10,
@@ -305,15 +329,12 @@ const styles = StyleSheet.create({
   },
   filtersContainer: {
     flexDirection: 'row',
-    padding: 15,
-    gap: 10,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: '#f0f0f0',
   },
@@ -321,72 +342,60 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
   },
   filterChipText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#666',
   },
   filterChipTextActive: {
     color: 'white',
   },
-  statsBar: {
+  actionBar: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: 'white',
-    padding: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
   },
-  statItem: {
+  statsCompact: {
     flex: 1,
-    alignItems: 'center',
+    marginRight: 10,
   },
-  statItemValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  owedValue: {
-    color: '#FF3B30',
-  },
-  statItemLabel: {
+  statsCompactText: {
     fontSize: 12,
     color: '#666',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#E5E5EA',
-    marginHorizontal: 10,
-  },
-  addButtonContainer: {
-    padding: 15,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    fontWeight: '500',
   },
   addButton: {
     backgroundColor: '#34C759',
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
-    alignItems: 'center',
   },
   addButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   listContent: {
-    padding: 15,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   customerCard: {
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  customerCardCompact: {
+    padding: 14,
   },
   customerHeader: {
     flexDirection: 'row',
@@ -409,15 +418,16 @@ const styles = StyleSheet.create({
   },
   customerInfo: {
     flex: 1,
+    minWidth: 0,
   },
   customerName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
   },
   customerPhone: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
   },
   balanceBadge: {
@@ -434,14 +444,18 @@ const styles = StyleSheet.create({
   customerStats: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 10,
+  },
+  customerStatsCompact: {
+    gap: 4,
   },
   statBox: {
     backgroundColor: '#f0f0f0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
+    minWidth: 80,
   },
   balanceBox: {
     backgroundColor: '#FFE5E5',
@@ -450,12 +464,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#E3F2FD',
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#666',
     marginBottom: 2,
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#333',
   },
@@ -463,31 +477,31 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
   },
   wishlistCount: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#1976D2',
   },
   wishlistSection: {
-    marginTop: 8,
-    paddingTop: 12,
+    marginTop: 6,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
   wishlistTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#666',
-    marginBottom: 6,
-  },
-  wishlistItem: {
-    fontSize: 14,
-    color: '#333',
     marginBottom: 4,
   },
+  wishlistItem: {
+    fontSize: 13,
+    color: '#333',
+    marginBottom: 3,
+  },
   lastPurchase: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#999',
-    marginTop: 8,
+    marginTop: 6,
     fontStyle: 'italic',
   },
   emptyContainer: {
@@ -495,13 +509,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#666',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#999',
     textAlign: 'center',
   },

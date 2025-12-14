@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Profile } from '../types';
 
 interface AuthState {
@@ -11,12 +13,24 @@ interface AuthState {
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  session: null,
-  isLoading: true,
-  setUser: (user) => set({ user }),
-  setSession: (session) => set({ session }),
-  setIsLoading: (isLoading) => set({ isLoading }),
-  logout: () => set({ user: null, session: null }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      session: null,
+      isLoading: true,
+      setUser: (user) => set({ user }),
+      setSession: (session) => set({ session }),
+      setIsLoading: (isLoading) => set({ isLoading }),
+      logout: () => set({ user: null, session: null }),
+    }),
+    {
+      name: 'auth-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        session: state.session,
+        user: state.user
+      }),
+    }
+  )
+);

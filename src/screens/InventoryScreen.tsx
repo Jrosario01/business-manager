@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  Dimensions,
+  Image,
 } from 'react-native';
 import { generateDummyShipments, Product, Shipment } from '../services/dummyData';
 import CreateShipmentModal from '../components/CreateShipmentModal';
@@ -27,6 +29,14 @@ export default function InventoryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setWindowWidth(window.width);
+    });
+    return () => subscription?.remove();
+  }, []);
 
   const shipments = useMemo(() => generateDummyShipments(), []);
 
@@ -110,19 +120,26 @@ export default function InventoryScreen() {
     );
   };
 
-  const renderProduct = ({ item, index }: { item: ProductWithShipment; index: number }) => {
+  const renderProduct = ({ item }: { item: ProductWithShipment }) => {
     const stockPercentage = (item.remaining / item.quantity) * 100;
     const stockColor = getStockColor(item.remaining, item.quantity);
 
     return (
-      <View style={[styles.productCard, index % 2 === 0 ? styles.productCardLeft : styles.productCardRight]}>
-        <View style={styles.productHeader}>
-          <View style={styles.productBrandRow}>
-            <Text style={styles.brandName}>{item.brand}</Text>
-            <Text style={styles.sizeBadge}>{item.size}</Text>
+      <View style={styles.productCard}>
+        <View style={styles.productTopRow}>
+          <View style={styles.productImageContainer}>
+            <View style={styles.placeholderImage}>
+              <Text style={styles.placeholderText}>📦</Text>
+            </View>
+          </View>
+          <View style={styles.productMainInfo}>
+            <View style={styles.productBrandRow}>
+              <Text style={styles.brandName}>{item.brand}</Text>
+              <Text style={styles.sizeBadge}>{item.size}</Text>
+            </View>
+            <Text style={styles.productName}>{item.name}</Text>
           </View>
         </View>
-        <Text style={styles.productName}>{item.name}</Text>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Cost</Text>
@@ -143,14 +160,14 @@ export default function InventoryScreen() {
         </View>
         <View style={styles.stockContainer}>
           <View style={styles.stockBar}>
-            <View 
+            <View
               style={[
-                styles.stockFill, 
-                { 
+                styles.stockFill,
+                {
                   width: `${stockPercentage}%`,
-                  backgroundColor: stockColor 
+                  backgroundColor: stockColor
                 }
-              ]} 
+              ]}
             />
           </View>
           <Text style={[styles.stockText, { color: stockColor }]}>
@@ -197,12 +214,7 @@ export default function InventoryScreen() {
         )}
       </View>
 
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersContainer}
-        contentContainerStyle={styles.filtersContent}
-      >
+      <View style={styles.filtersContainer}>
         {statusFilters.map(filter => (
           <TouchableOpacity
             key={filter.value}
@@ -220,26 +232,19 @@ export default function InventoryScreen() {
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
-      {/* THIS IS THE BUTTON - Making it SUPER visible */}
       <View style={styles.resultsBar}>
-        <View>
+        <View style={styles.resultsInfo}>
           <Text style={styles.resultsText}>
-            {totalProducts} product{totalProducts !== 1 ? 's' : ''}
-          </Text>
-          <Text style={styles.resultsText}>
-            {sections.length} shipment{sections.length !== 1 ? 's' : ''}
+            {totalProducts} product{totalProducts !== 1 ? 's' : ''} • {sections.length} shipment{sections.length !== 1 ? 's' : ''}
           </Text>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.createButton}
-          onPress={() => {
-            console.log('Button clicked!');
-            setIsCreateModalVisible(true);
-          }}
+          onPress={() => setIsCreateModalVisible(true)}
         >
-          <Text style={styles.createButtonText}>+ NEW SHIPMENT</Text>
+          <Text style={styles.createButtonText}>+ NEW</Text>
         </TouchableOpacity>
       </View>
 
@@ -250,7 +255,7 @@ export default function InventoryScreen() {
         renderSectionFooter={renderSectionFooter}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        stickySectionHeadersEnabled={true}
+        stickySectionHeadersEnabled={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No products found</Text>
@@ -299,23 +304,31 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   filtersContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    gap: 8,
   },
   filtersContent: {
-    padding: 15,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     gap: 10,
   },
   filterChip: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: '#f0f0f0',
-    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
   filterChipActive: {
     backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
   },
   filterChipText: {
     fontSize: 14,
@@ -329,21 +342,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
-    minHeight: 60,
+  },
+  resultsInfo: {
+    flex: 1,
+    marginRight: 10,
   },
   resultsText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
     fontWeight: '500',
   },
   createButton: {
     backgroundColor: '#FF3B30',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -353,17 +370,17 @@ const styles = StyleSheet.create({
   },
   createButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   listContent: {
-    padding: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
   sectionHeader: {
     backgroundColor: '#007AFF',
-    padding: 15,
-    marginHorizontal: 10,
-    marginTop: 10,
+    padding: 12,
+    marginBottom: 8,
     borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -375,12 +392,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
+    flexWrap: 'wrap',
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
+    marginRight: 8,
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -394,13 +413,14 @@ const styles = StyleSheet.create({
   },
   sectionStats: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   statPill: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
   },
@@ -417,36 +437,42 @@ const styles = StyleSheet.create({
     height: 20,
   },
   productCard: {
-    width: '48%',
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
+    padding: 12,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  productCardLeft: {
-    marginLeft: 10,
-    marginRight: 5,
-  },
-  productCardRight: {
-    marginLeft: 5,
-    marginRight: 10,
-  },
-  productHeader: {
+  productTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  productImageContainer: {
+    marginRight: 12,
+  },
+  placeholderImage: {
+    width: 70,
+    height: 70,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderText: {
+    fontSize: 36,
+  },
+  productMainInfo: {
+    flex: 1,
   },
   productBrandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flex: 1,
+    marginBottom: 6,
   },
   brandName: {
     fontSize: 13,
@@ -464,27 +490,29 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   productName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 12,
-    minHeight: 40,
+    lineHeight: 20,
+    flex: 1,
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
+    flexWrap: 'wrap',
   },
   statItem: {
     alignItems: 'center',
+    minWidth: '22%',
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#999',
     marginBottom: 2,
   },
   statValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#333',
   },
