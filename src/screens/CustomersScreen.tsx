@@ -41,10 +41,9 @@ export default function CustomersScreen() {
     if (!selectedCustomer) return;
 
     await updateCustomer(selectedCustomer.id, {
-      ...updatedData,
-      balance: selectedCustomer.balance,
-      totalPurchases: selectedCustomer.totalPurchases,
-      lastPurchase: selectedCustomer.lastPurchase,
+      name: updatedData.name,
+      phone: updatedData.phone,
+      wishlist: updatedData.wishlist,
     });
     setIsEditModalVisible(false);
     setSelectedCustomer(null);
@@ -52,9 +51,9 @@ export default function CustomersScreen() {
 
   const handleAddCustomer = async (customerData: { name: string; phone: string; wishlist: string[] }) => {
     await addCustomer({
-      ...customerData,
-      balance: 0,
-      totalPurchases: 0,
+      name: customerData.name,
+      phone: customerData.phone,
+      wishlist: customerData.wishlist || [],
     });
     setIsAddModalVisible(false);
   };
@@ -98,7 +97,7 @@ export default function CustomersScreen() {
         return stats.balance < 0;
       }
       if (filterType === 'wishlist') {
-        return customer.wishlist.length > 0;
+        return customer.wishlist && customer.wishlist.length > 0;
       }
 
       return true;
@@ -159,7 +158,7 @@ export default function CustomersScreen() {
             </View>
           )}
 
-          {item.wishlist.length > 0 && (
+          {item.wishlist && item.wishlist.length > 0 && (
             <View style={[styles.statBox, styles.wishlistBox]}>
               <Text style={styles.statLabel}>Wishlist</Text>
               <Text style={styles.wishlistCount}>
@@ -169,7 +168,7 @@ export default function CustomersScreen() {
           )}
         </View>
 
-        {item.wishlist.length > 0 && (
+        {item.wishlist && item.wishlist.length > 0 && (
           <View style={styles.wishlistSection}>
             <Text style={styles.wishlistTitle}>Interested In:</Text>
             {item.wishlist.map((product, index) => (
@@ -285,7 +284,7 @@ export default function CustomersScreen() {
           initialData={{
             name: selectedCustomer.name,
             phone: selectedCustomer.phone,
-            wishlist: selectedCustomer.wishlist,
+            wishlist: selectedCustomer.wishlist || [],
           }}
           customerId={selectedCustomer.id}
           isEdit={true}

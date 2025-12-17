@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,11 +29,18 @@ interface CreateShipmentModalProps {
 }
 
 export default function CreateShipmentModal({ visible, onClose, onSubmit }: CreateShipmentModalProps) {
-  const { products: catalogProducts, searchProducts, addProducts } = useProductsStore();
+  const { products: catalogProducts, searchProducts, addProducts, loadProducts } = useProductsStore();
 
   const [products, setProducts] = useState<ShipmentProduct[]>([
     { brand: '', name: '', size: '100ml', unitCost: '', quantity: '', catalogProductId: undefined }
   ]);
+
+  // Load products when modal opens
+  useEffect(() => {
+    if (visible) {
+      loadProducts();
+    }
+  }, [visible, loadProducts]);
   const [totalShippingCost, setTotalShippingCost] = useState('');
   const [notes, setNotes] = useState('');
   const [searchQuery, setSearchQuery] = useState<{ [key: number]: string }>({});
@@ -51,13 +58,14 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
   const shippingPerUnit = useMemo(() => calculateShippingPerUnit(), [totalShippingCost, products]);
 
   // Get product suggestions based on search
-  const getProductSuggestions = (index: number): CatalogProduct[] => {
+  const getProductSuggestions = (index: number): any[] => {
     const query = searchQuery[index] || '';
     console.log('getProductSuggestions - Query:', query);
+    console.log('getProductSuggestions - Catalog has', catalogProducts.length, 'products');
     if (!query || query.length < 2) return [];
 
     const results = searchProducts(query);
-    console.log('getProductSuggestions - Results:', results.length, 'products');
+    console.log('getProductSuggestions - Results:', results.length, 'products found');
     return results.slice(0, 10); // Limit to 10 results
   };
 
@@ -416,9 +424,9 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                       <View style={styles.selectedProductCard}>
                         {/* Product Image */}
                         <View style={styles.selectedProductImageContainer}>
-                          {product.catalogProductId && catalogProducts.find(p => p.id === product.catalogProductId)?.image ? (
+                          {product.catalogProductId && catalogProducts.find(p => p.id === product.catalogProductId)?.image_url ? (
                             <Image
-                              source={{ uri: catalogProducts.find(p => p.id === product.catalogProductId)!.image }}
+                              source={{ uri: catalogProducts.find(p => p.id === product.catalogProductId)!.image_url }}
                               style={styles.selectedProductImage}
                             />
                           ) : (

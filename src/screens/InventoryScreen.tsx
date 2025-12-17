@@ -1,276 +1,299 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SectionList,
-  TextInput,
-  TouchableOpacity,
   ScrollView,
-  Dimensions,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
   Image,
 } from 'react-native';
-import { generateDummyShipments, Product, Shipment } from '../services/dummyData';
-import CreateShipmentModal from '../components/CreateShipmentModal';
+import { useShipmentsStore } from '../store/shipmentsStore';
+import DualCurrencyText from '../components/DualCurrencyText';
 
-interface ProductWithShipment extends Product {
-  shipmentId: string;
-  shipmentNumber: string;
-  shipmentStatus: string;
-}
+type ViewMode = 'consolidated' | 'per-shipment';
 
-interface ShipmentSection {
-  title: string;
-  data: ProductWithShipment[];
-  shipment: Shipment;
+interface ConsolidatedProduct {
+  productId: string;
+  brand: string;
+  name: string;
+  size: string;
+  imageUrl?: string;
+  totalQuantity: number;
+  totalValue: number;
+  shipments: Array<{
+    shipmentNumber: string;
+    shipmentId: string;
+    quantity: number;
+    unitCost: number;
+    value: number;
+  }>;
 }
 
 export default function InventoryScreen() {
+  const { shipments, loadShipments, isLoading } = useShipmentsStore();
+  const [viewMode, setViewMode] = useState<ViewMode>('consolidated');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
 
   useEffect(() => {
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      setWindowWidth(window.width);
-    });
-    return () => subscription?.remove();
+    loadShipments();
   }, []);
 
-  const shipments = useMemo(() => generateDummyShipments(), []);
+  // Consolidated inventory - group by product across all shipments
+  const consolidatedInventory = useMemo(() => {
+    const productMap = new Map<string, ConsolidatedProduct>();
 
-  const sections: ShipmentSection[] = useMemo(() => {
-    let filteredShipments = shipments;
+    shipments.forEach(shipment => {
+      shipment.items.forEach(item => {
+        if (!item.product || item.remaining_inventory <= 0) return;
 
-    if (selectedStatus !== 'all') {
-      filteredShipments = filteredShipments.filter(s => s.status === selectedStatus);
-    }
+        const key = `${item.product.brand}-${item.product.name}-${item.product.size}`;
 
-    return filteredShipments.map(shipment => {
-      let products = shipment.products.map(p => ({
-        ...p,
-        shipmentId: shipment.id,
-        shipmentNumber: shipment.shipmentNumber,
-        shipmentStatus: shipment.status,
-      }));
+        if (!productMap.has(key)) {
+          productMap.set(key, {
+            productId: item.product_id,
+            brand: item.product.brand,
+            name: item.product.name,
+            size: item.product.size,
+            imageUrl: item.product.image_url,
+            totalQuantity: 0,
+            totalValue: 0,
+            shipments: [],
+          });
+        }
 
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        products = products.filter(p =>
-          p.brand.toLowerCase().includes(query) ||
-          p.name.toLowerCase().includes(query) ||
-          p.fullName.toLowerCase().includes(query)
-        );
-      }
+        const product = productMap.get(key)!;
+        const value = item.remaining_inventory * item.unit_cost;
 
-      return {
-        title: shipment.shipmentNumber,
-        data: products,
-        shipment,
-      };
-    }).filter(section => section.data.length > 0);
-  }, [shipments, searchQuery, selectedStatus]);
+        product.totalQuantity += item.remaining_inventory;
+        product.totalValue += value;
+        product.shipments.push({
+          shipmentNumber: shipment.shipment_number,
+          shipmentId: shipment.id,
+          quantity: item.remaining_inventory,
+          unitCost: item.unit_cost,
+          value,
+        });
+      });
+    });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'preparing': return '#FFA500';
-      case 'shipped': return '#007AFF';
-      case 'delivered': return '#34C759';
-      case 'settled': return '#8E8E93';
-      default: return '#8E8E93';
-    }
-  };
+    return Array.from(productMap.values()).sort((a, b) =>
+      a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name)
+    );
+  }, [shipments]);
 
-  const getStockColor = (remaining: number, total: number) => {
-    const percentage = (remaining / total) * 100;
-    if (percentage === 0) return '#FF3B30';
-    if (percentage < 30) return '#FF9500';
-    return '#34C759';
-  };
+  // Filter based on search
+  const filteredConsolidated = useMemo(() => {
+    if (!searchQuery) return consolidatedInventory;
+    const query = searchQuery.toLowerCase();
+    return consolidatedInventory.filter(p =>
+      p.brand.toLowerCase().includes(query) ||
+      p.name.toLowerCase().includes(query) ||
+      p.size.toLowerCase().includes(query)
+    );
+  }, [consolidatedInventory, searchQuery]);
 
-  const renderSectionHeader = ({ section }: { section: ShipmentSection }) => {
-    const statusColor = getStatusColor(section.shipment.status);
-    
+  const filteredShipments = useMemo(() => {
+    if (!searchQuery) return shipments;
+    const query = searchQuery.toLowerCase();
+    return shipments.filter(s =>
+      s.shipment_number.toLowerCase().includes(query) ||
+      s.items.some(item =>
+        item.product?.brand.toLowerCase().includes(query) ||
+        item.product?.name.toLowerCase().includes(query)
+      )
+    );
+  }, [shipments, searchQuery]);
+
+  const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
+
+  if (isLoading) {
     return (
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionHeaderTop}>
-          <Text style={styles.sectionTitle}>{section.title}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{section.shipment.status.toUpperCase()}</Text>
-          </View>
-        </View>
-        <View style={styles.sectionStats}>
-          <View style={styles.statPill}>
-            <Text style={styles.statPillLabel}>Products:</Text>
-            <Text style={styles.statPillValue}>{section.data.length}</Text>
-          </View>
-          <View style={styles.statPill}>
-            <Text style={styles.statPillLabel}>Total Units:</Text>
-            <Text style={styles.statPillValue}>{section.shipment.totalUnits}</Text>
-          </View>
-          <View style={styles.statPill}>
-            <Text style={styles.statPillLabel}>Remaining:</Text>
-            <Text style={[styles.statPillValue, { color: '#34C759' }]}>
-              {section.shipment.remainingUnits}
-            </Text>
-          </View>
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading inventory...</Text>
       </View>
     );
-  };
-
-  const renderProduct = ({ item }: { item: ProductWithShipment }) => {
-    const stockPercentage = (item.remaining / item.quantity) * 100;
-    const stockColor = getStockColor(item.remaining, item.quantity);
-
-    return (
-      <View style={styles.productCard}>
-        <View style={styles.productTopRow}>
-          <View style={styles.productImageContainer}>
-            <View style={styles.placeholderImage}>
-              <Text style={styles.placeholderText}>📦</Text>
-            </View>
-          </View>
-          <View style={styles.productMainInfo}>
-            <View style={styles.productBrandRow}>
-              <Text style={styles.brandName}>{item.brand}</Text>
-              <Text style={styles.sizeBadge}>{item.size}</Text>
-            </View>
-            <Text style={styles.productName}>{item.name}</Text>
-          </View>
-        </View>
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Cost</Text>
-            <Text style={styles.statValue}>${item.unitCost}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Sold</Text>
-            <Text style={[styles.statValue, { color: '#FF3B30' }]}>{item.sold}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Left</Text>
-            <Text style={[styles.statValue, { color: '#34C759' }]}>{item.remaining}</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Total</Text>
-            <Text style={styles.statValue}>{item.quantity}</Text>
-          </View>
-        </View>
-        <View style={styles.stockContainer}>
-          <View style={styles.stockBar}>
-            <View
-              style={[
-                styles.stockFill,
-                {
-                  width: `${stockPercentage}%`,
-                  backgroundColor: stockColor
-                }
-              ]}
-            />
-          </View>
-          <Text style={[styles.stockText, { color: stockColor }]}>
-            {stockPercentage.toFixed(0)}% in stock
-          </Text>
-        </View>
-      </View>
-    );
-  };
-
-  const renderSectionFooter = () => <View style={styles.sectionSpacer} />;
-
-  const statusFilters = [
-    { label: 'All', value: 'all' },
-    { label: 'Preparing', value: 'preparing' },
-    { label: 'Shipped', value: 'shipped' },
-    { label: 'Delivered', value: 'delivered' },
-  ];
-
-  const totalProducts = sections.reduce((sum, section) => sum + section.data.length, 0);
-
-  const handleCreateShipment = (shipmentData: any) => {
-    console.log('Creating shipment:', shipmentData);
-    setIsCreateModalVisible(false);
-  };
+  }
 
   return (
     <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Inventory</Text>
+      </View>
+
+      {/* Search */}
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search by brand or product name..."
+          placeholder="Search products or shipments..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholderTextColor="#999"
         />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity 
-            onPress={() => setSearchQuery('')}
-            style={styles.clearButton}
-          >
-            <Text style={styles.clearButtonText}>✕</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
-      <View style={styles.filtersContainer}>
-        {statusFilters.map(filter => (
-          <TouchableOpacity
-            key={filter.value}
-            style={[
-              styles.filterChip,
-              selectedStatus === filter.value && styles.filterChipActive
-            ]}
-            onPress={() => setSelectedStatus(filter.value)}
-          >
-            <Text style={[
-              styles.filterChipText,
-              selectedStatus === filter.value && styles.filterChipTextActive
-            ]}>
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.resultsBar}>
-        <View style={styles.resultsInfo}>
-          <Text style={styles.resultsText}>
-            {totalProducts} product{totalProducts !== 1 ? 's' : ''} • {sections.length} shipment{sections.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
+      {/* View Toggle */}
+      <View style={styles.toggleContainer}>
         <TouchableOpacity
-          style={styles.createButton}
-          onPress={() => setIsCreateModalVisible(true)}
+          style={[styles.toggleButton, viewMode === 'consolidated' && styles.toggleButtonActive]}
+          onPress={() => setViewMode('consolidated')}
         >
-          <Text style={styles.createButtonText}>+ NEW</Text>
+          <Text style={[styles.toggleText, viewMode === 'consolidated' && styles.toggleTextActive]}>
+            General View
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleButton, viewMode === 'per-shipment' && styles.toggleButtonActive]}
+          onPress={() => setViewMode('per-shipment')}
+        >
+          <Text style={[styles.toggleText, viewMode === 'per-shipment' && styles.toggleTextActive]}>
+            Per-Shipment
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <SectionList
-        sections={sections}
-        renderItem={renderProduct}
-        renderSectionHeader={renderSectionHeader}
-        renderSectionFooter={renderSectionFooter}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        stickySectionHeadersEnabled={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No products found</Text>
-            <Text style={styles.emptySubtext}>
-              {searchQuery ? 'Try a different search term' : 'No products match your filters'}
-            </Text>
-          </View>
-        }
-      />
+      {/* Content */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {viewMode === 'consolidated' ? (
+          // CONSOLIDATED VIEW
+          <View>
+            {filteredConsolidated.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No inventory found</Text>
+              </View>
+            ) : (
+              filteredConsolidated.map((product, index) => (
+                <View key={index} style={styles.productCard}>
+                  <View style={styles.productHeader}>
+                    {/* Product Image */}
+                    <View style={styles.productImageContainer}>
+                      {product.imageUrl ? (
+                        <Image
+                          source={{ uri: product.imageUrl }}
+                          style={styles.productImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={styles.productImagePlaceholder}>
+                          <Text style={styles.placeholderText}>📦</Text>
+                        </View>
+                      )}
+                    </View>
 
-      <CreateShipmentModal
-        visible={isCreateModalVisible}
-        onClose={() => setIsCreateModalVisible(false)}
-        onSubmit={handleCreateShipment}
-      />
+                    {/* Product Info */}
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productName}>{product.brand} {product.name}</Text>
+                      <Text style={styles.productSize}>{product.size}</Text>
+                      <View style={styles.productMetrics}>
+                        <Text style={styles.totalQuantity}>{product.totalQuantity} units</Text>
+                        <DualCurrencyText
+                          usdAmount={product.totalValue}
+                          primaryCurrency="USD"
+                          layout="horizontal"
+                          style={styles.totalValue}
+                          secondaryStyle={styles.totalValueSecondary}
+                          showLabels={false}
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Shipment Breakdown */}
+                  <View style={styles.breakdown}>
+                    <Text style={styles.breakdownTitle}>Breakdown:</Text>
+                    {product.shipments.map((shipment, idx) => (
+                      <View key={idx} style={styles.breakdownRow}>
+                        <Text style={styles.breakdownShipment}>• {shipment.shipmentNumber}</Text>
+                        <View style={styles.breakdownDetails}>
+                          <Text style={styles.breakdownText}>{shipment.quantity} units</Text>
+                          <DualCurrencyText
+                            usdAmount={shipment.value}
+                            primaryCurrency="USD"
+                            layout="horizontal"
+                            style={styles.breakdownValue}
+                            secondaryStyle={styles.breakdownSecondary}
+                            showLabels={false}
+                          />
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        ) : (
+          // PER-SHIPMENT VIEW
+          <View>
+            {filteredShipments.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No shipments found</Text>
+              </View>
+            ) : (
+              filteredShipments.map((shipment) => {
+                const itemsWithInventory = shipment.items.filter(i => i.remaining_inventory > 0);
+                if (itemsWithInventory.length === 0) return null;
+
+                const totalUnits = itemsWithInventory.reduce((sum, i) => sum + i.remaining_inventory, 0);
+                const totalValue = itemsWithInventory.reduce((sum, i) => sum + (i.remaining_inventory * i.unit_cost), 0);
+
+                return (
+                  <View key={shipment.id} style={styles.shipmentCard}>
+                    <View style={styles.shipmentHeader}>
+                      <View>
+                        <Text style={styles.shipmentNumber}>{shipment.shipment_number}</Text>
+                        <Text style={styles.shipmentDate}>
+                          {new Date(shipment.delivered_date || shipment.created_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={styles.shipmentSummary}>
+                        <Text style={styles.shipmentUnits}>{totalUnits} units</Text>
+                        <DualCurrencyText
+                          usdAmount={totalValue}
+                          primaryCurrency="USD"
+                          layout="vertical"
+                          style={styles.shipmentValue}
+                          secondaryStyle={styles.shipmentValueSecondary}
+                          showLabels={false}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Products in this shipment */}
+                    <View style={styles.shipmentProducts}>
+                      {itemsWithInventory.map((item, idx) => (
+                        <View key={item.id} style={[styles.shipmentProductRow, idx > 0 && styles.borderTop]}>
+                          <View style={styles.shipmentProductInfo}>
+                            <Text style={styles.shipmentProductName}>
+                              {item.product?.brand} {item.product?.name}
+                            </Text>
+                            <Text style={styles.shipmentProductSize}>{item.product?.size}</Text>
+                          </View>
+                          <View style={styles.shipmentProductStats}>
+                            <Text style={styles.shipmentProductQty}>{item.remaining_inventory} units</Text>
+                            <DualCurrencyText
+                              usdAmount={item.remaining_inventory * item.unit_cost}
+                              primaryCurrency="USD"
+                              layout="vertical"
+                              style={styles.shipmentProductValue}
+                              secondaryStyle={styles.shipmentProductValueSecondary}
+                              showLabels={false}
+                            />
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
+        )}
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
     </View>
   );
 }
@@ -280,275 +303,283 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  searchContainer: {
-    flexDirection: 'row',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  header: {
     backgroundColor: 'white',
-    padding: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  searchContainer: {
+    backgroundColor: 'white',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
   },
   searchInput: {
-    flex: 1,
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
   },
-  clearButton: {
-    marginLeft: 10,
-    padding: 8,
-  },
-  clearButtonText: {
-    fontSize: 20,
-    color: '#999',
-  },
-  filtersContainer: {
+  toggleContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 8,
   },
-  filtersContent: {
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  filterChip: {
-    paddingHorizontal: 16,
+  toggleButton: {
+    flex: 1,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 8,
     backgroundColor: '#f0f0f0',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
+    alignItems: 'center',
   },
-  filterChipActive: {
+  toggleButtonActive: {
     backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
   },
-  filterChipText: {
+  toggleText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#666',
   },
-  filterChipTextActive: {
+  toggleTextActive: {
     color: 'white',
   },
-  resultsBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  resultsInfo: {
+  content: {
     flex: 1,
-    marginRight: 10,
+    padding: 16,
   },
-  resultsText: {
-    fontSize: 13,
-    color: '#666',
-    fontWeight: '500',
-  },
-  createButton: {
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  createButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  listContent: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-  },
-  sectionHeader: {
-    backgroundColor: '#007AFF',
-    padding: 12,
-    marginBottom: 8,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  sectionHeaderTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  emptyState: {
+    paddingVertical: 60,
     alignItems: 'center',
-    marginBottom: 8,
-    flexWrap: 'wrap',
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-    marginRight: 8,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  sectionStats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  statPill: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  statPillLabel: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  statPillValue: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  sectionSpacer: {
-    height: 20,
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
   },
   productCard: {
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  productTopRow: {
+  productHeader: {
     flexDirection: 'row',
-    marginBottom: 10,
+    marginBottom: 12,
+    gap: 12,
   },
   productImageContainer: {
-    marginRight: 12,
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
-  placeholderImage: {
-    width: 70,
-    height: 70,
-    borderRadius: 10,
+  productImage: {
+    width: '100%',
+    height: '100%',
+  },
+  productImagePlaceholder: {
+    width: '100%',
+    height: '100%',
     backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   placeholderText: {
-    fontSize: 36,
+    fontSize: 32,
   },
-  productMainInfo: {
+  productInfo: {
     flex: 1,
-  },
-  productBrandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  brandName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#007AFF',
-    textTransform: 'uppercase',
-  },
-  sizeBadge: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#666',
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    justifyContent: 'center',
   },
   productName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  productSize: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  productMetrics: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  totalQuantity: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  totalValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
-    lineHeight: 20,
-    flex: 1,
+    color: '#34C759',
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    flexWrap: 'wrap',
-  },
-  statItem: {
-    alignItems: 'center',
-    minWidth: '22%',
-  },
-  statLabel: {
-    fontSize: 10,
+  totalValueSecondary: {
+    fontSize: 12,
     color: '#999',
-    marginBottom: 2,
   },
-  statValue: {
+  breakdown: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  breakdownTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#333',
-  },
-  stockContainer: {
-    marginTop: 8,
-  },
-  stockBar: {
-    height: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  stockFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  stockText: {
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-    flex: 1,
-  },
-  emptyText: {
-    fontSize: 18,
     fontWeight: '600',
     color: '#666',
     marginBottom: 8,
   },
-  emptySubtext: {
-    fontSize: 14,
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  breakdownShipment: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
+  },
+  breakdownDetails: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  breakdownText: {
+    fontSize: 13,
+    color: '#666',
+  },
+  breakdownValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+  },
+  breakdownSecondary: {
+    fontSize: 11,
     color: '#999',
-    textAlign: 'center',
+  },
+  shipmentCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  shipmentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  shipmentNumber: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  shipmentDate: {
+    fontSize: 13,
+    color: '#666',
+  },
+  shipmentSummary: {
+    alignItems: 'flex-end',
+  },
+  shipmentUnits: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  shipmentValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  shipmentValueSecondary: {
+    fontSize: 12,
+    color: '#999',
+  },
+  shipmentProducts: {
+    gap: 0,
+  },
+  shipmentProductRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  borderTop: {
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  shipmentProductInfo: {
+    flex: 1,
+  },
+  shipmentProductName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  shipmentProductSize: {
+    fontSize: 13,
+    color: '#666',
+  },
+  shipmentProductStats: {
+    alignItems: 'flex-end',
+  },
+  shipmentProductQty: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 2,
+  },
+  shipmentProductCost: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  shipmentProductValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  shipmentProductValueSecondary: {
+    fontSize: 11,
+    color: '#999',
+  },
+  bottomSpacer: {
+    height: 20,
   },
 });

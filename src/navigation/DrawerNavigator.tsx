@@ -5,6 +5,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 
 // Import screens
+import HomeScreen from '../screens/HomeScreen';
 import InventoryScreen from '../screens/InventoryScreen';
 import ShipmentsScreen from '../screens/ShipmentsScreen';
 import SalesScreen from '../screens/SalesScreen';
@@ -47,6 +48,7 @@ function CustomDrawerContent(props: any) {
 export default function DrawerNavigator() {
   return (
     <Drawer.Navigator
+      initialRouteName="Home"
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
         drawerStyle: {
@@ -68,6 +70,14 @@ export default function DrawerNavigator() {
         },
       }}
     >
+      <Drawer.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          drawerLabel: '🏠 Home',
+          title: 'Business Dashboard',
+        }}
+      />
       <Drawer.Screen
         name="Inventory"
         component={InventoryScreen}

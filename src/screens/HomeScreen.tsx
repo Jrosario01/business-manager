@@ -14,7 +14,7 @@ import { useExchangeRateStore } from '../store/exchangeRateStore';
 import CurrencySettingsModal from '../components/CurrencySettingsModal';
 import DualCurrencyText from '../components/DualCurrencyText';
 
-export default function DashboardScreen() {
+export default function HomeScreen() {
   const { shipments, loadShipments, isLoading: shipmentsLoading } = useShipmentsStore();
   const { sales, loadSales, isLoading: salesLoading } = useSalesStore();
   const { loadCachedRate, usdToDop } = useExchangeRateStore();
@@ -29,7 +29,7 @@ export default function DashboardScreen() {
     await Promise.all([
       loadShipments(),
       loadSales(),
-      loadCachedRate(), // Load exchange rate
+      loadCachedRate(),
     ]);
   };
 

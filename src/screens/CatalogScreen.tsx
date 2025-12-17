@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import AddProductModal from '../components/AddProductModal';
 import EditProductModal from '../components/EditProductModal';
-import { useProductsStore, Product } from '../store/productsStore';
+import { useProductsStore, SupabaseProduct } from '../store/productsStore';
 
 export default function CatalogScreen() {
   const {
@@ -28,7 +28,7 @@ export default function CatalogScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<SupabaseProduct | null>(null);
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
 
   useEffect(() => {
@@ -59,16 +59,16 @@ export default function CatalogScreen() {
     }
     acc[product.brand].push(product);
     return acc;
-  }, {} as Record<string, Product[]>);
+  }, {} as Record<string, SupabaseProduct[]>);
 
   const brands = Object.keys(productsByBrand).sort();
 
-  const handleProductPress = (product: Product) => {
+  const handleProductPress = (product: SupabaseProduct) => {
     setSelectedProduct(product);
     setIsEditModalVisible(true);
   };
 
-  const renderProduct = (product: Product) => {
+  const renderProduct = (product: SupabaseProduct) => {
     const isCompact = windowWidth < 380;
 
     return (
@@ -79,8 +79,8 @@ export default function CatalogScreen() {
         activeOpacity={0.7}
       >
         <View style={[styles.productImageContainer, isCompact && styles.productImageCompact]}>
-          {product.image ? (
-            <Image source={{ uri: product.image }} style={styles.productImage} />
+          {product.image_url ? (
+            <Image source={{ uri: product.image_url }} style={styles.productImage} />
           ) : (
             <View style={styles.placeholderImage}>
               <Text style={styles.placeholderText}>📦</Text>

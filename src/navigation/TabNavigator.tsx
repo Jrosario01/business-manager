@@ -4,17 +4,19 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/navigation';
 
 // Import screens
-import ShipmentsListScreen from '../screens/ShipmentsListScreen';
+import HomeScreen from '../screens/HomeScreen';
+import ShipmentsStack from './ShipmentsStack';
 import InventoryScreen from '../screens/InventoryScreen';
 import SalesScreen from '../screens/SalesScreen';
 import CustomersScreen from '../screens/CustomersScreen';
-import DashboardScreen from '../screens/DashboardScreen';
+import ReportsScreen from '../screens/ReportsScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabNavigator() {
   return (
     <Tab.Navigator
+      initialRouteName="HomeTab"
       screenOptions={{
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#8E8E93',
@@ -44,11 +46,23 @@ export default function TabNavigator() {
       }}
     >
       <Tab.Screen
+        name="HomeTab"
+        component={HomeScreen}
+        options={{
+          title: 'Home',
+          tabBarLabel: 'Home',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ fontSize: size, color }}>🏠</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
         name="ShipmentsTab"
-        component={ShipmentsListScreen}
+        component={ShipmentsStack}
         options={{
           title: 'Shipments',
           tabBarLabel: 'Shipments',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Text style={{ fontSize: size, color }}>📦</Text>
           ),
@@ -89,7 +103,7 @@ export default function TabNavigator() {
       />
       <Tab.Screen
         name="ReportsTab"
-        component={DashboardScreen}
+        component={ReportsScreen}
         options={{
           title: 'Reports',
           tabBarLabel: 'Reports',

@@ -15,7 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 interface EditProductModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (product: { id: string; brand: string; name: string; size: string; cost: number; image?: string }) => void;
+  onSubmit: (product: { id: string; brand: string; name: string; size: string; cost: number; image_url?: string }) => void;
   onDelete: (id: string) => void;
   product: {
     id: string;
@@ -23,7 +23,7 @@ interface EditProductModalProps {
     name: string;
     size: string;
     cost: number;
-    image?: string;
+    image_url?: string;
   } | null;
   existingBrands: string[];
 }
@@ -109,7 +109,7 @@ export default function EditProductModal({
       setName(product.name);
       setSize(product.size || '100ml');
       setCost(product.cost.toString());
-      setImage(product.image || '');
+      setImage(product.image_url || '');
     }
   }, [product]);
 
@@ -173,7 +173,7 @@ export default function EditProductModal({
       name: name.trim(),
       size: size,
       cost: parseFloat(cost),
-      image: image || undefined,
+      image_url: image || undefined,
     });
 
     resetForm();
