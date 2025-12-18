@@ -20,19 +20,29 @@ export default function DualCurrencyText({
   showLabels = true,
 }: DualCurrencyTextProps) {
   const { convertToDop } = useExchangeRateStore();
-  const dopAmount = convertToDop(usdAmount);
 
-  const formatUSD = (amount: number) => showLabels
-    ? `$${amount.toFixed(2)} USD`
-    : `$${amount.toFixed(2)}`;
+  // Ensure we have valid amounts
+  const safeUsdAmount = usdAmount || 0;
+  const dopAmount = convertToDop(safeUsdAmount);
+  const safeDopAmount = isNaN(dopAmount) || dopAmount === undefined ? 0 : dopAmount;
 
-  const formatDOP = (amount: number) => showLabels
-    ? `$${amount.toFixed(2)} DOP`
-    : `$${amount.toFixed(2)}`;
+  const formatUSD = (amount: number) => {
+    const safeAmount = amount || 0;
+    return showLabels
+      ? `$${safeAmount.toFixed(2)} USD`
+      : `$${safeAmount.toFixed(2)}`;
+  };
+
+  const formatDOP = (amount: number) => {
+    const safeAmount = amount || 0;
+    return showLabels
+      ? `$${safeAmount.toFixed(2)} DOP`
+      : `$${safeAmount.toFixed(2)}`;
+  };
 
   const isPrimaryUSD = primaryCurrency === 'USD';
-  const primaryAmount = isPrimaryUSD ? formatUSD(usdAmount) : formatDOP(dopAmount);
-  const secondaryAmount = isPrimaryUSD ? formatDOP(dopAmount) : formatUSD(usdAmount);
+  const primaryAmount = isPrimaryUSD ? formatUSD(safeUsdAmount) : formatDOP(safeDopAmount);
+  const secondaryAmount = isPrimaryUSD ? formatDOP(safeDopAmount) : formatUSD(safeUsdAmount);
 
   if (layout === 'horizontal') {
     return (

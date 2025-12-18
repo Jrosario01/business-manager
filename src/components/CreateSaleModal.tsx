@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
 import { useCustomersStore } from '../store/customersStore';
+import { useExchangeRateStore } from '../store/exchangeRateStore';
 
 interface CreateSaleModalProps {
   visible: boolean;
@@ -29,6 +30,7 @@ interface SaleProduct {
   amountPaid: string; // Amount paid for THIS product
   catalogProductId?: string;
   showCost?: boolean; // Toggle to show/hide cost
+  peekCost?: boolean; // Temporary peek at cost (triple-tap)
 }
 
 export default function CreateSaleModal({
@@ -38,6 +40,7 @@ export default function CreateSaleModal({
 }: CreateSaleModalProps) {
   const { products: catalogProducts, searchProducts, loadProducts } = useProductsStore();
   const { customers, searchCustomers, loadCustomers, addCustomer } = useCustomersStore();
+  const { usdToDop } = useExchangeRateStore();
 
   // Load products and customers when modal becomes visible
   useEffect(() => {
@@ -62,12 +65,16 @@ export default function CreateSaleModal({
 
   // Sale products
   const [products, setProducts] = useState<SaleProduct[]>([
-    { brand: '', name: '', size: '', quantity: '', unitCost: 0, salePrice: '', amountPaid: '', showCost: false }
+    { brand: '', name: '', size: '', quantity: '', unitCost: 0, salePrice: '', amountPaid: '', showCost: false, peekCost: false }
   ]);
 
   // Product search
   const [productSearches, setProductSearches] = useState<{ [key: number]: string }>({});
   const [showSuggestions, setShowSuggestions] = useState<number>(-1);
+
+  // Triple-tap detection for peeking at cost
+  const [tapCounts, setTapCounts] = useState<{ [key: number]: number }>({});
+  const [tapTimers, setTapTimers] = useState<{ [key: number]: NodeJS.Timeout | null }>({});
 
   // Notes
   const [notes, setNotes] = useState('');
@@ -128,7 +135,7 @@ export default function CreateSaleModal({
       size: catalogProduct.size,
       unitCost: catalogProduct.cost,
       quantity: newProducts[index].quantity,
-      salePrice: (catalogProduct.cost * 1.8).toFixed(0), // Suggest 80% markup
+      salePrice: '', // Leave empty for manual entry
       amountPaid: newProducts[index].amountPaid,
       catalogProductId: catalogProduct.id,
       showCost: false,
@@ -170,6 +177,40 @@ export default function CreateSaleModal({
     setProducts(newProducts);
   };
 
+  const handleTripleTap = (index: number) => {
+    // Clear existing timer for this index
+    if (tapTimers[index]) {
+      clearTimeout(tapTimers[index]!);
+    }
+
+    // Increment tap count
+    const currentCount = (tapCounts[index] || 0) + 1;
+    setTapCounts({ ...tapCounts, [index]: currentCount });
+
+    // If 3 taps, show cost for 2 seconds
+    if (currentCount === 3) {
+      const newProducts = [...products];
+      newProducts[index].peekCost = true;
+      setProducts(newProducts);
+
+      // Hide after 1.5 seconds
+      setTimeout(() => {
+        const updatedProducts = [...products];
+        updatedProducts[index].peekCost = false;
+        setProducts(updatedProducts);
+      }, 1500);
+
+      // Reset tap count
+      setTapCounts({ ...tapCounts, [index]: 0 });
+    } else {
+      // Reset tap count after 500ms of no taps
+      const timer = setTimeout(() => {
+        setTapCounts({ ...tapCounts, [index]: 0 });
+      }, 500);
+      setTapTimers({ ...tapTimers, [index]: timer });
+    }
+  };
+
   const addProduct = () => {
     setProducts([...products, {
       brand: '',
@@ -180,6 +221,7 @@ export default function CreateSaleModal({
       salePrice: '',
       amountPaid: '',
       showCost: false,
+      peekCost: false,
     }]);
   };
 
@@ -314,9 +356,11 @@ export default function CreateSaleModal({
     setIsAddingNewCustomer(false);
     setNewCustomerName('');
     setNewCustomerPhone('');
-    setProducts([{ brand: '', name: '', size: '', quantity: '', unitCost: 0, salePrice: '', amountPaid: '', showCost: false }]);
+    setProducts([{ brand: '', name: '', size: '', quantity: '', unitCost: 0, salePrice: '', amountPaid: '', showCost: false, peekCost: false }]);
     setProductSearches({});
     setShowSuggestions(-1);
+    setTapCounts({});
+    setTapTimers({});
     setNotes('');
   };
 
@@ -485,13 +529,24 @@ export default function CreateSaleModal({
             return (
               <View key={index} style={styles.productCard}>
                 <View style={styles.productHeader}>
-                  <Text style={styles.productNumber}>Product {index + 1}</Text>
+                  <TouchableOpacity onPress={() => handleTripleTap(index)} activeOpacity={0.7}>
+                    <Text style={styles.productNumber}>Product {index + 1}</Text>
+                  </TouchableOpacity>
                   {products.length > 1 && (
                     <TouchableOpacity onPress={() => removeProduct(index)}>
                       <Text style={styles.removeButton}>✕ Remove</Text>
                     </TouchableOpacity>
                   )}
                 </View>
+
+                {/* Peek Cost - shows for 1.5 seconds after triple-tap */}
+                {product.peekCost && product.catalogProductId && (
+                  <View style={styles.peekCostBanner}>
+                    <Text style={styles.peekCostText}>
+                      💰 ${product.unitCost.toFixed(2)} USD (${(product.unitCost * usdToDop).toFixed(2)} DOP)
+                    </Text>
+                  </View>
+                )}
 
                 {/* Product Selection */}
                 {!product.catalogProductId ? (
@@ -1233,5 +1288,19 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 20,
+  },
+  peekCostBanner: {
+    backgroundColor: '#FFF3CD',
+    padding: 6,
+    borderRadius: 6,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9500',
+    alignItems: 'center',
+  },
+  peekCostText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#856404',
   },
 });

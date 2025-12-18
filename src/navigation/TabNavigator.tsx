@@ -4,19 +4,19 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { TabParamList } from '../types/navigation';
 
 // Import screens
-import HomeScreen from '../screens/HomeScreen';
 import ShipmentsStack from './ShipmentsStack';
 import InventoryScreen from '../screens/InventoryScreen';
 import SalesScreen from '../screens/SalesScreen';
 import CustomersScreen from '../screens/CustomersScreen';
 import ReportsScreen from '../screens/ReportsScreen';
+import CurrencyScreen from '../screens/CurrencyScreen';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
 export default function TabNavigator() {
   return (
     <Tab.Navigator
-      initialRouteName="HomeTab"
+      initialRouteName="ShipmentsTab"
       screenOptions={{
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#8E8E93',
@@ -45,17 +45,6 @@ export default function TabNavigator() {
         },
       }}
     >
-      <Tab.Screen
-        name="HomeTab"
-        component={HomeScreen}
-        options={{
-          title: 'Home',
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>🏠</Text>
-          ),
-        }}
-      />
       <Tab.Screen
         name="ShipmentsTab"
         component={ShipmentsStack}
@@ -109,6 +98,17 @@ export default function TabNavigator() {
           tabBarLabel: 'Reports',
           tabBarIcon: ({ color, size }) => (
             <Text style={{ fontSize: size, color }}>📊</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="CurrencyTab"
+        component={CurrencyScreen}
+        options={{
+          title: 'Currency',
+          tabBarLabel: 'Currency',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ fontSize: size, color }}>💱</Text>
           ),
         }}
       />

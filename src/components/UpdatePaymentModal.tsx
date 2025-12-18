@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,15 @@ interface UpdatePaymentModalProps {
 
 export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }: UpdatePaymentModalProps) {
   const [productPayments, setProductPayments] = useState<{ [index: number]: string }>({});
+
+  // Reset payment fields when modal opens/closes
+  useEffect(() => {
+    if (!visible) {
+      // Reset when modal closes
+      setProductPayments({});
+    }
+    // Don't pre-populate - leave fields empty for new payments
+  }, [visible, sale]);
 
   if (!sale) return null;
 
@@ -80,24 +89,33 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
 
     Object.entries(productPayments).forEach(([indexStr, valueStr]) => {
       const index = parseInt(indexStr);
-      const value = parseFloat(valueStr);
-      if (!isNaN(value) && value > 0) {
+      const additionalPayment = parseFloat(valueStr);
+      if (!isNaN(additionalPayment) && additionalPayment > 0) {
         const product = sale.products[index];
         const productTotal = product.soldPrice * product.quantity;
-        const currentPaid = product.amountPaid || 0;
-        const newTotalPaid = currentPaid + value;
 
-        if (newTotalPaid > productTotal) {
+        // Calculate current paid amount (proportional or actual)
+        let currentPaid = product.amountPaid || 0;
+        if (currentPaid === 0 && sale.amountPaid > 0) {
+          const saleTotal = sale.products.reduce((sum, p) => sum + (p.soldPrice * p.quantity), 0);
+          const productPercentage = productTotal / saleTotal;
+          currentPaid = sale.amountPaid * productPercentage;
+        }
+
+        // Calculate new total by adding additional payment to current paid
+        const newTotal = currentPaid + additionalPayment;
+
+        if (newTotal > productTotal) {
           Alert.alert('Error', `Payment for ${product.brand} ${product.name} exceeds total amount`);
           return;
         }
 
-        updates[index] = newTotalPaid;
+        updates[index] = newTotal; // New total after adding additional payment
       }
     });
 
     if (Object.keys(updates).length === 0) {
-      Alert.alert('Error', 'Please enter at least one payment amount');
+      Alert.alert('Error', 'No changes to save');
       return;
     }
 
@@ -116,11 +134,11 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
 
   // Calculate summary
   const totalBalance = sale.totalRevenue - sale.amountPaid;
-  const totalPaymentEntered = Object.entries(productPayments).reduce((sum, [indexStr, valueStr]) => {
-    const value = parseFloat(valueStr);
-    return sum + (isNaN(value) ? 0 : value);
+  const totalPaymentChange = Object.entries(productPayments).reduce((sum, [index, valueStr]) => {
+    const additionalPayment = parseFloat(valueStr) || 0;
+    return sum + additionalPayment; // Sum up all additional payments
   }, 0);
-  const remainingAfterPayment = totalBalance - totalPaymentEntered;
+  const remainingAfterPayment = totalBalance - totalPaymentChange;
 
   return (
     <Modal
@@ -156,93 +174,152 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
           </View>
 
           {/* Products with Individual Payments */}
-          <Text style={styles.sectionTitle}>Outstanding Balances</Text>
+          {/* Separate products into unpaid and paid */}
+          {(() => {
+            const productsWithStatus = sale.products.map((product, index) => {
+              const productTotal = product.soldPrice * product.quantity;
+              let productPaid = product.amountPaid || 0;
 
-          {sale.products.map((product, index) => {
-            const productTotal = product.soldPrice * product.quantity;
-            const productPaid = product.amountPaid || 0;
-            const productBalance = productTotal - productPaid;
-            const isPaid = productBalance === 0;
-            const paymentAmount = parseFloat(productPayments[index]) || 0;
-            const newBalance = productBalance - paymentAmount;
+              // If no product-level payment but sale has payment, calculate proportionally
+              if (productPaid === 0 && sale.amountPaid > 0) {
+                const saleTotal = sale.products.reduce((sum, p) => sum + (p.soldPrice * p.quantity), 0);
+                const productPercentage = productTotal / saleTotal;
+                productPaid = sale.amountPaid * productPercentage;
+              }
 
-            if (isPaid) return null; // Don't show paid products
+              const productBalance = productTotal - productPaid;
+              const isPaid = productBalance === 0;
+
+              return { product, index, productTotal, productPaid, productBalance, isPaid };
+            });
+
+            const unpaidProducts = productsWithStatus.filter(p => !p.isPaid);
+            const paidProducts = productsWithStatus.filter(p => p.isPaid);
 
             return (
-              <View key={index} style={styles.productCard}>
-                <View style={styles.productHeader}>
-                  <Text style={styles.productName}>
-                    {product.quantity}× {product.brand} {product.name}
-                  </Text>
-                  <Text style={styles.productPrice}>${productTotal.toFixed(2)}</Text>
-                </View>
+              <>
+                {/* Outstanding Balances Section */}
+                {unpaidProducts.length > 0 && (
+                  <>
+                    <Text style={styles.sectionTitle}>Outstanding Balances</Text>
+                    {unpaidProducts.map(({ product, index, productTotal, productPaid, productBalance }) => {
+                      const enteredAmount = parseFloat(productPayments[index]) || 0;
+                      const paymentChange = enteredAmount;
+                      const newBalance = productBalance - enteredAmount;
 
-                <View style={styles.statusRow}>
-                  <View style={styles.statusItem}>
-                    <Text style={styles.statusLabel}>Paid</Text>
-                    <Text style={styles.statusValue}>${productPaid.toFixed(2)}</Text>
-                  </View>
-                  <View style={styles.statusItem}>
-                    <Text style={styles.statusLabelDue}>Due</Text>
-                    <Text style={styles.statusValueDue}>${productBalance.toFixed(2)}</Text>
-                  </View>
-                </View>
+                      return (
+                        <View key={index} style={styles.productCard}>
+                          <View style={styles.productHeader}>
+                            <Text style={styles.productName}>
+                              {product.quantity}× {product.brand} {product.name}
+                            </Text>
+                            <Text style={styles.productPrice}>${productTotal.toFixed(2)}</Text>
+                          </View>
 
-                <View style={styles.divider} />
+                          <View style={styles.statusRow}>
+                            <View style={styles.statusItem}>
+                              <Text style={styles.statusLabel}>Paid</Text>
+                              <Text style={styles.statusValue}>${productPaid.toFixed(2)}</Text>
+                            </View>
+                            <View style={styles.statusItem}>
+                              <Text style={styles.statusLabelDue}>Due</Text>
+                              <Text style={styles.statusValueDue}>${productBalance.toFixed(2)}</Text>
+                            </View>
+                          </View>
 
-                <Text style={styles.inputLabel}>Payment Amount</Text>
-                <View style={styles.paymentRow}>
-                  <View style={styles.inputRow}>
-                    <Text style={styles.dollarSign}>$</Text>
-                    <TextInput
-                      style={styles.paymentInput}
-                      placeholder="0.00"
-                      value={productPayments[index] || ''}
-                      onChangeText={(value) => handlePaymentChange(index, value)}
-                      keyboardType="decimal-pad"
-                    />
-                    {productPayments[index] && (
-                      <TouchableOpacity
-                        style={styles.clearButton}
-                        onPress={() => clearPayment(index)}
-                      >
-                        <Text style={styles.clearButtonText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                          <View style={styles.divider} />
 
-                  {/* Pay Full Button */}
-                  <TouchableOpacity
-                    style={styles.payFullButton}
-                    onPress={() => quickFillAmount(index, productBalance)}
-                  >
-                    <Text style={styles.payFullButtonText}>Pay Full</Text>
-                  </TouchableOpacity>
-                </View>
+                          <Text style={styles.inputLabel}>Amount to Pay</Text>
+                          <View style={styles.paymentRow}>
+                            <View style={styles.inputRow}>
+                              <Text style={styles.dollarSign}>$</Text>
+                              <TextInput
+                                style={styles.paymentInput}
+                                placeholder="0.00"
+                                value={productPayments[index] || ''}
+                                onChangeText={(value) => handlePaymentChange(index, value)}
+                                keyboardType="decimal-pad"
+                              />
+                              {productPayments[index] && (
+                                <TouchableOpacity
+                                  style={styles.clearButton}
+                                  onPress={() => clearPayment(index)}
+                                >
+                                  <Text style={styles.clearButtonText}>✕</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
 
-                {/* Preview New Balance */}
-                {paymentAmount > 0 && (
-                  <View style={styles.previewBox}>
-                    <View style={styles.previewRow}>
-                      <Text style={styles.previewLabel}>Payment:</Text>
-                      <Text style={styles.previewValue}>-${paymentAmount.toFixed(2)}</Text>
-                    </View>
-                    <View style={[styles.previewRow, styles.newBalanceRow]}>
-                      <Text style={styles.newBalanceLabel}>New Balance:</Text>
-                      <Text style={[styles.newBalanceValue, newBalance === 0 && styles.newBalancePaid]}>
-                        ${newBalance.toFixed(2)} {newBalance === 0 && '✓'}
-                      </Text>
-                    </View>
-                  </View>
+                            {/* Pay Full Button */}
+                            <TouchableOpacity
+                              style={styles.payFullButton}
+                              onPress={() => quickFillAmount(index, productBalance)}
+                            >
+                              <Text style={styles.payFullButtonText}>Pay Full</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Preview New Balance */}
+                          {enteredAmount > 0 && (
+                            <View style={styles.previewBox}>
+                              <View style={styles.previewRow}>
+                                <Text style={styles.previewLabel}>Paying:</Text>
+                                <Text style={styles.previewValue}>
+                                  +${paymentChange.toFixed(2)}
+                                </Text>
+                              </View>
+                              <View style={[styles.previewRow, styles.newBalanceRow]}>
+                                <Text style={styles.newBalanceLabel}>Remaining Balance:</Text>
+                                <Text style={[styles.newBalanceValue, newBalance === 0 && styles.newBalancePaid]}>
+                                  ${newBalance.toFixed(2)} {newBalance === 0 && '✓'}
+                                </Text>
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </>
                 )}
-              </View>
+
+                {/* Paid Products Section */}
+                {paidProducts.length > 0 && (
+                  <>
+                    <Text style={[styles.sectionTitle, styles.paidSectionTitle]}>Paid in Full</Text>
+                    {paidProducts.map(({ product, index, productTotal, productPaid }) => (
+                      <View key={index} style={[styles.productCard, styles.paidProductCard]}>
+                        <View style={styles.productHeader}>
+                          <Text style={[styles.productName, styles.paidProductName]}>
+                            {product.quantity}× {product.brand} {product.name}
+                          </Text>
+                          <Text style={[styles.productPrice, styles.paidProductPrice]}>
+                            ${productTotal.toFixed(2)}
+                          </Text>
+                        </View>
+
+                        <View style={styles.paidBadge}>
+                          <Text style={styles.paidBadgeText}>✓ Paid ${productPaid.toFixed(2)}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </>
             );
-          })}
+          })()}
 
           {/* No outstanding balances message */}
           {sale.products.every(p => {
             const productTotal = p.soldPrice * p.quantity;
-            const productPaid = p.amountPaid || 0;
+
+            // Calculate current paid amount (proportional or actual)
+            let productPaid = p.amountPaid || 0;
+            if (productPaid === 0 && sale.amountPaid > 0) {
+              const saleTotal = sale.products.reduce((sum, prod) => sum + (prod.soldPrice * prod.quantity), 0);
+              const productPercentage = productTotal / saleTotal;
+              productPaid = sale.amountPaid * productPercentage;
+            }
+
             return productTotal === productPaid;
           }) && (
             <View style={styles.nothingDueCard}>
@@ -255,9 +332,11 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
 
         {/* Payment Summary Footer */}
         <View style={styles.footer}>
-          {totalPaymentEntered > 0 && (
+          {totalPaymentChange > 0 && (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Payment: ${totalPaymentEntered.toFixed(2)}</Text>
+              <Text style={styles.summaryLabel}>
+                Total Payment: ${totalPaymentChange.toFixed(2)}
+              </Text>
               <Text style={styles.summaryDivider}>•</Text>
               <Text style={[styles.summaryLabel, remainingAfterPayment === 0 && styles.summaryLabelPaid]}>
                 Remaining: ${remainingAfterPayment.toFixed(2)}
@@ -275,12 +354,12 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.submitButton, totalPaymentEntered === 0 && styles.submitButtonDisabled]}
+              style={[styles.submitButton, totalPaymentChange === 0 && styles.submitButtonDisabled]}
               onPress={handleSubmit}
-              disabled={totalPaymentEntered === 0}
+              disabled={totalPaymentChange === 0}
             >
               <Text style={styles.submitButtonText}>
-                {totalPaymentEntered > 0 ? 'Record Payment' : 'Enter Amount'}
+                {totalPaymentChange > 0 ? 'Save Payment' : 'Enter Amount'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -610,5 +689,33 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 20,
+  },
+  paidSectionTitle: {
+    color: '#2E7D32',
+    marginTop: 16,
+  },
+  paidProductCard: {
+    backgroundColor: '#F1F8F4',
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+    opacity: 0.85,
+  },
+  paidProductName: {
+    color: '#666',
+  },
+  paidProductPrice: {
+    color: '#2E7D32',
+  },
+  paidBadge: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(46, 125, 50, 0.2)',
+    alignItems: 'center',
+  },
+  paidBadgeText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#2E7D32',
   },
 });

@@ -13,17 +13,15 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import CreateShipmentModal from '../components/CreateShipmentModal';
-import EditCostModal from '../components/EditCostModal';
-import InventoryAdjustmentModal from '../components/InventoryAdjustmentModal';
 import DualCurrencyText from '../components/DualCurrencyText';
 import { useShipmentsStore, ShipmentWithItems } from '../store/shipmentsStore';
+import { useExchangeRateStore } from '../store/exchangeRateStore';
 
 export default function ShipmentsScreen() {
   const navigation = useNavigation<any>();
   const { shipments, loadShipments, isLoading } = useShipmentsStore();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<ShipmentWithItems | null>(null);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'preparing' | 'shipped' | 'delivered' | 'settled'>('all');
 
   useEffect(() => {
     loadShipments();
@@ -47,7 +45,7 @@ export default function ShipmentsScreen() {
       // Create shipment object
       const shipment = {
         shipment_number: shipmentNumber,
-        status: shipmentData.status as 'preparing' | 'shipped' | 'delivered' | 'settled',
+        status: 'delivered' as 'preparing' | 'shipped' | 'delivered' | 'settled', // Always delivered
         shipping_cost: shippingCost,
         additional_costs: 0, // Can be added later
         total_cost: totalCost,
@@ -77,43 +75,16 @@ export default function ShipmentsScreen() {
     }
   };
 
-  const filteredShipments = shipments.filter(shipment => {
-    if (statusFilter === 'all') return true;
-    return shipment.status === statusFilter;
-  });
+  const filteredShipments = shipments; // No filtering needed
 
   const calculateTotals = () => {
     return {
       totalShipments: shipments.length,
-      preparing: shipments.filter(s => s.status === 'preparing').length,
-      shipped: shipments.filter(s => s.status === 'shipped').length,
-      delivered: shipments.filter(s => s.status === 'delivered').length,
-      settled: shipments.filter(s => s.status === 'settled').length,
       totalValue: shipments.reduce((sum, s) => sum + s.total_cost, 0),
     };
   };
 
   const totals = calculateTotals();
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'preparing': return '#FF9800';
-      case 'shipped': return '#007AFF';
-      case 'delivered': return '#34C759';
-      case 'settled': return '#8E8E93';
-      default: return '#666';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'preparing': return 'Preparing';
-      case 'shipped': return 'Shipped';
-      case 'delivered': return 'Delivered';
-      case 'settled': return 'Settled';
-      default: return status;
-    }
-  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -122,11 +93,6 @@ export default function ShipmentsScreen() {
 
   const renderShipmentCard = ({ item }: { item: ShipmentWithItems }) => {
     const totalUnits = item.items.reduce((sum, i) => sum + i.quantity, 0);
-    const remainingUnits = item.items.reduce((sum, i) => sum + i.remaining_inventory, 0);
-    const soldUnits = totalUnits - remainingUnits;
-    const soldPercentage = totalUnits > 0 ? Math.round((soldUnits / totalUnits) * 100) : 0;
-    const roi = item.total_cost > 0 ? ((item.net_profit / item.total_cost) * 100).toFixed(1) : '0';
-    const isProfitable = item.net_profit >= 0;
 
     return (
       <TouchableOpacity
@@ -134,88 +100,18 @@ export default function ShipmentsScreen() {
         activeOpacity={0.7}
         onPress={() => setSelectedShipment(item)}
       >
-        <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.shipmentDate}>{item.shipment_number}</Text>
-            <Text style={styles.shipmentId}>
-              {item.delivered_date
-                ? formatDate(item.delivered_date)
-                : formatDate(item.created_at)}
+        <View style={styles.cardContent}>
+          <View style={styles.shipmentInfo}>
+            <Text style={styles.shipmentNumber}>{item.shipment_number}</Text>
+            <Text style={styles.shipmentDate}>
+              {formatDate(item.created_at)}
             </Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-            <Text style={styles.statusText}>{getStatusLabel(item.status)}</Text>
+          <View style={styles.shipmentMeta}>
+            <Text style={styles.productCount}>{totalUnits}</Text>
+            <Text style={styles.productCountLabel}>units</Text>
           </View>
         </View>
-
-        <View style={styles.cardDivider} />
-
-        {/* Inventory Progress Bar */}
-        <View style={styles.inventoryProgress}>
-          <View style={styles.inventoryProgressHeader}>
-            <Text style={styles.inventoryProgressLabel}>
-              Inventory: {remainingUnits}/{totalUnits} units ({soldPercentage}% sold)
-            </Text>
-            <Text style={styles.inventoryProgressUnits}>{item.items.length} products</Text>
-          </View>
-          <View style={styles.inventoryProgressBar}>
-            <View
-              style={[
-                styles.inventoryProgressFill,
-                { width: `${soldPercentage}%` }
-              ]}
-            />
-          </View>
-        </View>
-
-        <View style={styles.cardDivider} />
-
-        <View style={styles.cardFooter}>
-          <View style={styles.costBreakdown}>
-            <View style={styles.costRow}>
-              <Text style={styles.costLabel}>Investment:</Text>
-              <DualCurrencyText
-                usdAmount={item.total_cost}
-                primaryCurrency="USD"
-                layout="horizontal"
-                style={styles.costValue}
-                secondaryStyle={styles.costSecondary}
-                showLabels={false}
-              />
-            </View>
-            <View style={styles.costRow}>
-              <Text style={styles.costLabel}>Revenue:</Text>
-              <DualCurrencyText
-                usdAmount={item.total_revenue}
-                primaryCurrency="USD"
-                layout="horizontal"
-                style={styles.costValue}
-                secondaryStyle={styles.costSecondary}
-                showLabels={false}
-              />
-            </View>
-          </View>
-          <View style={styles.totalCost}>
-            <Text style={styles.totalLabel}>Profit ({roi}% ROI)</Text>
-            <DualCurrencyText
-              usdAmount={item.net_profit}
-              primaryCurrency="USD"
-              layout="vertical"
-              style={[
-                styles.totalValue,
-                isProfitable ? styles.profitPositive : styles.profitNegative
-              ]}
-              secondaryStyle={styles.profitSecondary}
-              showLabels={false}
-            />
-          </View>
-        </View>
-
-        {item.notes && (
-          <View style={styles.notesSection}>
-            <Text style={styles.notesText} numberOfLines={2}>📝 {item.notes}</Text>
-          </View>
-        )}
       </TouchableOpacity>
     );
   };
@@ -236,19 +132,11 @@ export default function ShipmentsScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{totals.totalShipments}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={styles.statLabel}>Total Shipments</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totals.preparing}</Text>
-            <Text style={styles.statLabel}>Preparing</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totals.shipped}</Text>
-            <Text style={styles.statLabel}>Shipped</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totals.delivered}</Text>
-            <Text style={styles.statLabel}>Delivered</Text>
+            <Text style={styles.statValue}>${totals.totalValue.toFixed(0)}</Text>
+            <Text style={styles.statLabel}>Total Investment</Text>
           </View>
         </View>
 
@@ -258,28 +146,6 @@ export default function ShipmentsScreen() {
         >
           <Text style={styles.newShipmentButtonText}>+ New Shipment</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Status Filters */}
-      <View style={styles.filtersContainer}>
-        {(['all', 'preparing', 'shipped', 'delivered', 'settled'] as const).map(filter => (
-          <TouchableOpacity
-            key={filter}
-            style={[
-              styles.filterChip,
-              statusFilter === filter && styles.filterChipActive,
-            ]}
-            onPress={() => setStatusFilter(filter)}
-          >
-            <Text style={[
-              styles.filterChipText,
-              statusFilter === filter && styles.filterChipTextActive,
-            ]}>
-              {filter === 'all' ? 'All' :
-               filter.charAt(0).toUpperCase() + filter.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
 
       {/* Shipments List */}
@@ -340,28 +206,21 @@ export default function ShipmentsScreen() {
 
 // Shipment Details Component (inline)
 function ShipmentDetailsView({ shipment }: { shipment: ShipmentWithItems }) {
-  const [editingItem, setEditingItem] = useState<{
-    id: string;
-    cost: number;
-    name: string;
-    quantity: number;
-    remaining: number;
-  } | null>(null);
+  const { usdToDop, loadCachedRate } = useExchangeRateStore();
 
-  const [adjustingItem, setAdjustingItem] = useState<{
-    id: string;
-    currentInventory: number;
-    originalQuantity: number;
-    name: string;
-  } | null>(null);
+  useEffect(() => {
+    // Ensure exchange rate is loaded
+    loadCachedRate();
+  }, []);
 
   const totalUnits = shipment.items.reduce((sum, item) => sum + item.quantity, 0);
-  const remainingUnits = shipment.items.reduce((sum, item) => sum + item.remaining_inventory, 0);
-  const soldUnits = totalUnits - remainingUnits;
-  const roi = shipment.total_cost > 0 ? ((shipment.net_profit / shipment.total_cost) * 100).toFixed(1) : '0';
-  const completionPercentage = totalUnits > 0 ? ((soldUnits / totalUnits) * 100).toFixed(0) : '0';
+
+  // Calculate product costs and shipping per item
+  const productCosts = shipment.items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+  const shippingPerItem = totalUnits > 0 ? shipment.shipping_cost / totalUnits : 0;
 
   const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
+  const formatWithPesos = (amount: number) => `${formatCurrency(amount)} ($${(amount * usdToDop).toFixed(0)})`;
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -385,154 +244,63 @@ function ShipmentDetailsView({ shipment }: { shipment: ShipmentWithItems }) {
         <Text style={styles.detailCardTitle}>Financial Summary</Text>
 
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Investment</Text>
-          <DualCurrencyText
-            usdAmount={shipment.total_cost}
-            primaryCurrency="USD"
-            layout="horizontal"
-            style={styles.detailValue}
-            secondaryStyle={styles.detailSecondary}
-            showLabels={false}
-          />
+          <Text style={styles.detailLabel}>Product Costs</Text>
+          <Text style={styles.detailValue}>{formatCurrency(productCosts)}</Text>
         </View>
 
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Revenue</Text>
-          <DualCurrencyText
-            usdAmount={shipment.total_revenue || 0}
-            primaryCurrency="USD"
-            layout="horizontal"
-            style={[styles.detailValue, styles.revenueText]}
-            secondaryStyle={styles.detailSecondary}
-            showLabels={false}
-          />
-        </View>
-
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Profit</Text>
-          <DualCurrencyText
-            usdAmount={shipment.net_profit || 0}
-            primaryCurrency="USD"
-            layout="horizontal"
-            style={[styles.detailValue, shipment.net_profit >= 0 ? styles.profitText : styles.lossText]}
-            secondaryStyle={styles.detailSecondary}
-            showLabels={false}
-          />
-        </View>
-
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>ROI</Text>
-          <Text style={[styles.detailValue, parseFloat(roi) >= 0 ? styles.profitText : styles.lossText]}>
-            {roi}%
+          <Text style={styles.detailLabel}>Shipping Cost</Text>
+          <Text style={styles.detailValue}>
+            {formatCurrency(shipment.shipping_cost)} ({formatCurrency(shippingPerItem)}/item)
           </Text>
         </View>
 
-        {/* Progress */}
-        <View style={styles.progressSection}>
-          <Text style={styles.progressLabel}>{completionPercentage}% Sold ({soldUnits}/{totalUnits} units)</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${completionPercentage}%` }]} />
-          </View>
+        <View style={[styles.detailRow, styles.totalInvestmentRow]}>
+          <Text style={styles.totalInvestmentLabel}>Total Cost</Text>
+          <Text style={styles.totalInvestmentValue}>{formatCurrency(shipment.total_cost)}</Text>
         </View>
       </View>
 
       {/* Products */}
       <View style={styles.detailCard}>
-        <Text style={styles.detailCardTitle}>Products ({shipment.items.length})</Text>
+        <Text style={styles.detailCardTitle}>Products ({totalUnits} units • {shipment.items.length} types)</Text>
 
-        {shipment.items.map((item, index) => {
-          const soldQty = item.quantity - item.remaining_inventory;
-          return (
-            <View key={item.id} style={[styles.productRow, index > 0 && styles.productRowBorder]}>
-              <View style={styles.productRowContent}>
-                {/* Product Image */}
-                <View style={styles.shipmentProductImageContainer}>
-                  {item.product?.image_url ? (
-                    <Image
-                      source={{ uri: item.product.image_url }}
-                      style={styles.shipmentProductImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.shipmentProductImagePlaceholder}>
-                      <Text style={styles.shipmentProductPlaceholderText}>📦</Text>
-                    </View>
-                  )}
+        {shipment.items.map((item, index) => (
+          <View key={item.id} style={[styles.productRow, index > 0 && styles.productRowBorder]}>
+            <View style={styles.productRowContent}>
+              {/* Product Image */}
+              <View style={styles.shipmentProductImageContainer}>
+                {item.product?.image_url ? (
+                  <Image
+                    source={{ uri: item.product.image_url }}
+                    style={styles.shipmentProductImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.shipmentProductImagePlaceholder}>
+                    <Text style={styles.shipmentProductPlaceholderText}>📦</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Product Info */}
+              <View style={styles.productDetailsContainer}>
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName}>
+                    {item.product?.brand} {item.product?.name}
+                  </Text>
+                  <Text style={styles.productSize}>{item.product?.size}</Text>
                 </View>
 
-                {/* Product Info and Actions */}
-                <View style={styles.productDetailsContainer}>
-                  <View style={styles.productInfo}>
-                    <Text style={styles.productName}>
-                      {item.product?.brand} {item.product?.name}
-                    </Text>
-                    <Text style={styles.productSize}>{item.product?.size}</Text>
-                  </View>
-
-                  <View style={styles.productStats}>
-                    <Text style={styles.productStat}>Original: {item.quantity}</Text>
-                    <Text style={styles.productStat}>Sold: {soldQty}</Text>
-                    <Text style={styles.productStat}>Left: {item.remaining_inventory}</Text>
-                  </View>
-
-                  <View style={styles.productActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => setEditingItem({
-                        id: item.id,
-                        cost: item.unit_cost,
-                        name: `${item.product?.brand} ${item.product?.name}`,
-                        quantity: item.quantity,
-                        remaining: item.remaining_inventory,
-                      })}
-                    >
-                      <Text style={styles.actionButtonText}>Edit Cost ✎</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.adjustButton]}
-                      onPress={() => setAdjustingItem({
-                        id: item.id,
-                        currentInventory: item.remaining_inventory,
-                        originalQuantity: item.quantity,
-                        name: `${item.product?.brand} ${item.product?.name}`,
-                      })}
-                    >
-                      <Text style={styles.actionButtonText}>Adjust Inventory ±</Text>
-                    </TouchableOpacity>
-                  </View>
+                <View style={styles.productStats}>
+                  <Text style={styles.productStat}>Cost: {formatWithPesos((item.product?.cost || item.unit_cost) + shippingPerItem)}</Text>
+                  <Text style={styles.productStat}>Qty: {item.quantity}</Text>
                 </View>
               </View>
             </View>
-          );
-        })}
+          </View>
+        ))}
       </View>
-
-      {/* Edit Cost Modal */}
-      {editingItem && (
-        <EditCostModal
-          visible={editingItem !== null}
-          onClose={() => setEditingItem(null)}
-          shipmentItemId={editingItem.id}
-          currentCost={editingItem.cost}
-          productName={editingItem.name}
-          quantity={editingItem.quantity}
-          remainingInventory={editingItem.remaining}
-          shipmentId={shipment.id}
-        />
-      )}
-
-      {/* Inventory Adjustment Modal */}
-      {adjustingItem && (
-        <InventoryAdjustmentModal
-          visible={adjustingItem !== null}
-          onClose={() => setAdjustingItem(null)}
-          shipmentItemId={adjustingItem.id}
-          currentInventory={adjustingItem.currentInventory}
-          originalQuantity={adjustingItem.originalQuantity}
-          productName={adjustingItem.name}
-          shipmentId={shipment.id}
-        />
-      )}
     </View>
   );
 }
@@ -809,7 +577,7 @@ const styles = StyleSheet.create({
   shipmentCard: {
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -817,16 +585,42 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  cardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  shipmentInfo: {
+    flex: 1,
+  },
+  shipmentNumber: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  shipmentDate: {
+    fontSize: 14,
+    color: '#666',
+  },
+  shipmentMeta: {
+    alignItems: 'center',
+  },
+  productCount: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  productCountLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
-  },
-  shipmentDate: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
   },
   shipmentId: {
     fontSize: 11,
@@ -997,5 +791,34 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: '#666',
+  },
+  totalInvestmentRow: {
+    paddingTop: 12,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  totalInvestmentLabel: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  totalInvestmentValue: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  marginTopLarge: {
+    marginTop: 16,
+  },
+  shippingCostContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  perItemText: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 4,
   },
 });

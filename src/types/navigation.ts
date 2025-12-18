@@ -2,12 +2,12 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 
 // Main Tab Navigator
 export type TabParamList = {
-  HomeTab: undefined;
   ShipmentsTab: undefined;
   InventoryTab: undefined;
   SalesTab: undefined;
   CustomersTab: undefined;
   ReportsTab: undefined;
+  CurrencyTab: undefined;
 };
 
 // Stack Navigators for each tab

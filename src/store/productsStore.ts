@@ -9,6 +9,7 @@ export interface SupabaseProduct {
   name: string;
   size: string;
   cost: number;
+  sale_price?: number;
   description?: string;
   fragrance_notes?: string;
   image_url?: string;

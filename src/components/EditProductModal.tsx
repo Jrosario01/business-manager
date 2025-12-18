@@ -9,13 +9,15 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 
 interface EditProductModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (product: { id: string; brand: string; name: string; size: string; cost: number; image_url?: string }) => void;
+  onSubmit: (product: { id: string; brand: string; name: string; size: string; cost: number; sale_price?: number; image_url?: string }) => void;
   onDelete: (id: string) => void;
   product: {
     id: string;
@@ -23,6 +25,7 @@ interface EditProductModalProps {
     name: string;
     size: string;
     cost: number;
+    sale_price?: number;
     image_url?: string;
   } | null;
   existingBrands: string[];
@@ -99,6 +102,7 @@ export default function EditProductModal({
   const [name, setName] = useState('');
   const [size, setSize] = useState('100ml');
   const [cost, setCost] = useState('');
+  const [salePrice, setSalePrice] = useState('');
   const [image, setImage] = useState('');
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
 
@@ -109,6 +113,7 @@ export default function EditProductModal({
       setName(product.name);
       setSize(product.size || '100ml');
       setCost(product.cost.toString());
+      setSalePrice(product.sale_price?.toString() || (product.cost * 2).toString());
       setImage(product.image_url || '');
     }
   }, [product]);
@@ -173,6 +178,7 @@ export default function EditProductModal({
       name: name.trim(),
       size: size,
       cost: parseFloat(cost),
+      sale_price: salePrice ? parseFloat(salePrice) : undefined,
       image_url: image || undefined,
     });
 
@@ -225,15 +231,23 @@ export default function EditProductModal({
       onRequestClose={handleCancel}
     >
       <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleCancel}>
-            <Text style={styles.cancelButton}>Cancel</Text>
+        <LinearGradient
+          colors={['#667eea', '#764ba2']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
+        >
+          <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
+            <Text style={styles.cancelButton}>✕</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Edit Product</Text>
-          <TouchableOpacity onPress={handleSubmit}>
-            <Text style={styles.saveButton}>Save</Text>
+          <View style={styles.titleContainer}>
+            <Text style={styles.titleIcon}>✏️</Text>
+            <Text style={styles.title}>Edit Product</Text>
+          </View>
+          <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
+            <Text style={styles.saveButton}>✓</Text>
           </TouchableOpacity>
-        </View>
+        </LinearGradient>
 
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           {/* Compact Image Section */}
@@ -266,22 +280,24 @@ export default function EditProductModal({
           </View>
 
           {/* Brand Input with Autocomplete */}
-          <Text style={styles.label}>Brand *</Text>
-          <View style={styles.brandCard}>
-            <TextInput
-              style={styles.input}
-              placeholder="Start typing brand name..."
-              value={brand}
-              onChangeText={(text) => {
-                setBrand(text);
-                setShowBrandSuggestions(text.length > 0);
-              }}
-              onFocus={() => setShowBrandSuggestions(brand.length > 0)}
-              onBlur={() => {
-                // Delay to allow click on suggestion
-                setTimeout(() => setShowBrandSuggestions(false), 200);
-              }}
-            />
+          <View style={styles.card}>
+            <Text style={styles.label}>🏷️ Brand *</Text>
+            <View style={styles.brandCard}>
+              <TextInput
+                style={styles.input}
+                placeholder="Start typing brand name..."
+                placeholderTextColor="#999"
+                value={brand}
+                onChangeText={(text) => {
+                  setBrand(text);
+                  setShowBrandSuggestions(text.length > 0);
+                }}
+                onFocus={() => setShowBrandSuggestions(brand.length > 0)}
+                onBlur={() => {
+                  // Delay to allow click on suggestion
+                  setTimeout(() => setShowBrandSuggestions(false), 200);
+                }}
+              />
 
             {showBrandSuggestions && brandSuggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
@@ -316,19 +332,24 @@ export default function EditProductModal({
                 })}
               </View>
             )}
+            </View>
           </View>
 
           {/* Product Name */}
-          <Text style={styles.label}>Product Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter product name..."
-            value={name}
-            onChangeText={setName}
-          />
+          <View style={styles.card}>
+            <Text style={styles.label}>📦 Product Name *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter product name..."
+              placeholderTextColor="#999"
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
 
           {/* Size Selector */}
-          <Text style={styles.label}>Size *</Text>
+          <View style={styles.card}>
+            <Text style={styles.label}>📏 Size *</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -352,16 +373,34 @@ export default function EditProductModal({
               </TouchableOpacity>
             ))}
           </ScrollView>
+          </View>
 
           {/* Unit Cost */}
-          <Text style={styles.label}>Unit Cost ($) *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="0.00"
-            value={cost}
-            onChangeText={setCost}
-            keyboardType="decimal-pad"
-          />
+          <View style={styles.card}>
+            <Text style={styles.label}>💰 Unit Cost ($) *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#999"
+              value={cost}
+              onChangeText={setCost}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          {/* Sale Price */}
+          <View style={styles.card}>
+            <Text style={styles.label}>💵 Sale Price ($)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              placeholderTextColor="#999"
+              value={salePrice}
+              onChangeText={setSalePrice}
+              keyboardType="decimal-pad"
+            />
+            <Text style={styles.helperText}>Suggested retail price for customers</Text>
+          </View>
 
           {/* Delete Button */}
           <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
@@ -378,35 +417,65 @@ export default function EditProductModal({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   cancelButton: {
-    fontSize: 16,
-    color: '#FF3B30',
-    fontWeight: '600',
+    fontSize: 22,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  titleIcon: {
+    fontSize: 22,
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: 'white',
   },
   saveButton: {
-    fontSize: 16,
-    color: '#34C759',
-    fontWeight: '600',
+    fontSize: 24,
+    color: 'white',
+    fontWeight: 'bold',
   },
   content: {
     flex: 1,
-    padding: 12,
+    padding: 16,
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   imageSection: {
     marginBottom: 12,
@@ -417,84 +486,101 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   productImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: '#667eea',
   },
   changeImageButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    backgroundColor: '#667eea',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   changeImageText: {
     color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   removeImageButton: {
     backgroundColor: '#FF3B30',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   removeImageText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   addImageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#667eea',
     borderStyle: 'dashed',
   },
   imageIcon: {
-    fontSize: 24,
-    marginRight: 8,
+    fontSize: 28,
+    marginRight: 12,
   },
   imageText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '600',
+    fontSize: 15,
+    color: '#667eea',
+    fontWeight: 'bold',
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 6,
-    marginTop: 8,
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#667eea',
+    marginBottom: 10,
   },
   brandCard: {
     marginBottom: 12,
   },
   input: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    borderWidth: 2,
+    borderColor: '#e9ecef',
+    color: '#333',
   },
   suggestionsContainer: {
-    marginTop: 6,
+    marginTop: 8,
     backgroundColor: 'white',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e9ecef',
     maxHeight: 150,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   suggestionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 10,
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -502,17 +588,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9',
   },
   suggestionText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#333',
   },
   createNewText: {
     color: '#2E7D32',
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   existingBadge: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#34C759',
-    fontWeight: '600',
+    fontWeight: 'bold',
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   sizeScrollContainer: {
     flexDirection: 'row',
@@ -520,21 +610,26 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   sizeChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#f0f0f0',
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+    marginRight: 8,
+    borderWidth: 2,
+    borderColor: '#e9ecef',
   },
   sizeChipActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#667eea',
+    borderColor: '#667eea',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sizeChipText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: 'bold',
     color: '#666',
   },
   sizeChipTextActive: {
@@ -542,22 +637,29 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     backgroundColor: '#FF3B30',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   deleteButtonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   bottomSpacer: {
     height: 40,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+    marginBottom: 12,
   },
 });

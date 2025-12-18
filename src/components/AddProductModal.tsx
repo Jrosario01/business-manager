@@ -17,13 +17,14 @@ interface ProductForm {
   name: string;
   size: string;
   cost: string;
+  sale_price?: string;
   image?: string;
 }
 
 interface AddProductModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (products: { brand: string; name: string; size: string; cost: number; image?: string }[]) => void;
+  onSubmit: (products: { brand: string; name: string; size: string; cost: number; sale_price?: number; image?: string }[]) => void;
   existingBrands: string[];
 }
 
@@ -93,7 +94,7 @@ export default function AddProductModal({
   existingBrands,
 }: AddProductModalProps) {
   const [products, setProducts] = useState<ProductForm[]>([
-    { brand: '', name: '', size: '100ml', cost: '', image: undefined }
+    { brand: '', name: '', size: '100ml', cost: '', sale_price: '', image: undefined }
   ]);
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(-1);
   const [selectedProductIndex, setSelectedProductIndex] = useState<number | null>(null);
@@ -144,7 +145,7 @@ export default function AddProductModal({
   };
 
   const addProduct = () => {
-    setProducts([...products, { brand: '', name: '', size: '100ml', cost: '', image: undefined }]);
+    setProducts([...products, { brand: '', name: '', size: '100ml', cost: '', sale_price: '', image: undefined }]);
   };
 
   const removeProduct = (index: number) => {
@@ -178,6 +179,7 @@ export default function AddProductModal({
       name: p.name.trim(),
       size: p.size,
       cost: parseFloat(p.cost),
+      sale_price: p.sale_price ? parseFloat(p.sale_price) : undefined,
       image: p.image,
     }));
 
@@ -375,6 +377,17 @@ export default function AddProductModal({
                   onChangeText={(text) => updateProduct(index, 'cost', text)}
                   keyboardType="decimal-pad"
                 />
+
+                {/* Sale Price */}
+                <Text style={styles.label}>Sale Price ($)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  value={product.sale_price || ''}
+                  onChangeText={(text) => updateProduct(index, 'sale_price', text)}
+                  keyboardType="decimal-pad"
+                />
+                <Text style={styles.helperText}>Suggested retail price</Text>
               </View>
             );
           })}
@@ -592,6 +605,12 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+    marginBottom: 12,
   },
   selectedBrandCard: {
     flexDirection: 'row',

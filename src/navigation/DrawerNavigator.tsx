@@ -5,13 +5,13 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 
 // Import screens
-import HomeScreen from '../screens/HomeScreen';
 import InventoryScreen from '../screens/InventoryScreen';
 import ShipmentsScreen from '../screens/ShipmentsScreen';
 import SalesScreen from '../screens/SalesScreen';
 import CustomersScreen from '../screens/CustomersScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import CatalogScreen from '../screens/CatalogScreen';
+import CurrencyScreen from '../screens/CurrencyScreen';
 
 
 // Import auth store for logout
@@ -48,7 +48,7 @@ function CustomDrawerContent(props: any) {
 export default function DrawerNavigator() {
   return (
     <Drawer.Navigator
-      initialRouteName="Home"
+      initialRouteName="Shipments"
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
         drawerStyle: {
@@ -70,14 +70,6 @@ export default function DrawerNavigator() {
         },
       }}
     >
-      <Drawer.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          drawerLabel: '🏠 Home',
-          title: 'Business Dashboard',
-        }}
-      />
       <Drawer.Screen
         name="Inventory"
         component={InventoryScreen}
@@ -125,6 +117,14 @@ export default function DrawerNavigator() {
         options={{
           drawerLabel: '📊 Reports',
           title: 'Reports & Analytics',
+        }}
+      />
+      <Drawer.Screen
+        name="Currency"
+        component={CurrencyScreen}
+        options={{
+          drawerLabel: '💱 Currency',
+          title: 'Currency Settings',
         }}
       />
     </Drawer.Navigator>

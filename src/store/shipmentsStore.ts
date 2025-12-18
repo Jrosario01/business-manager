@@ -37,6 +37,8 @@ export interface SupabaseShipmentItem {
     brand: string;
     name: string;
     size: string;
+    cost: number;
+    sale_price?: number;
     image_url?: string;
   };
 }
@@ -92,6 +94,8 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
               brand,
               name,
               size,
+              cost,
+              sale_price,
               image_url
             )
           )
@@ -127,6 +131,8 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
               brand,
               name,
               size,
+              cost,
+              sale_price,
               image_url
             )
           )
@@ -177,6 +183,8 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
               brand,
               name,
               size,
+              cost,
+              sale_price,
               image_url
             )
           `);
@@ -258,6 +266,7 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
             brand,
             name,
             size,
+            sale_price,
             image_url
           )
         `)

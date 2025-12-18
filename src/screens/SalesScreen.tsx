@@ -5,15 +5,16 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  ScrollView,
 } from 'react-native';
 import CreateSaleModal from '../components/CreateSaleModal';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import { useSalesStore, Sale } from '../store/salesStore';
+import { useShipmentsStore } from '../store/shipmentsStore';
 
 export default function SalesScreen() {
   const { sales, loadSales, addSale, updateSale } = useSalesStore();
-  const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'pending' | 'partial'>('all');
+  const { loadShipments } = useShipmentsStore();
+  const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'partial'>('all');
   const [isCreateSaleModalVisible, setIsCreateSaleModalVisible] = useState(false);
   const [isUpdatePaymentModalVisible, setIsUpdatePaymentModalVisible] = useState(false);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -40,7 +41,13 @@ export default function SalesScreen() {
       profit: saleData.profit,
       paymentStatus: saleData.paymentStatus,
       amountPaid: saleData.amountPaid,
+      currency: 'DOP',
+      exchangeRateUsed: 60, // Will be replaced with actual rate in store
     });
+
+    // Reload shipments to reflect updated inventory and profit
+    await loadShipments();
+
     setIsCreateSaleModalVisible(false);
   };
 
@@ -72,19 +79,17 @@ export default function SalesScreen() {
     const newStatus = newBalance === 0 ? 'paid' : (newAmountPaid > 0 ? 'partial' : 'pending');
 
     await updateSale(selectedSale.id, {
-      products: updatedProducts,
+      products: updatedProducts,  // Pass updated products with individual payments
       amountPaid: newAmountPaid,
       paymentStatus: newStatus as 'paid' | 'pending' | 'partial',
     });
 
+    // Reload shipments to reflect any payment/profit updates
+    await loadShipments();
+
     setIsUpdatePaymentModalVisible(false);
     setSelectedSale(null);
   };
-
-  const totalRevenue = sales.reduce((sum, sale) => sum + sale.totalRevenue, 0);
-  const totalProfit = sales.reduce((sum, sale) => sum + sale.profit, 0);
-  const totalPaid = sales.reduce((sum, sale) => sum + sale.amountPaid, 0);
-  const totalPending = totalRevenue - totalPaid;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -138,17 +143,24 @@ export default function SalesScreen() {
 
         <View style={styles.saleFooter}>
           <View style={styles.footerRow}>
-            <Text style={styles.footerLabel}>Revenue:</Text>
+            <Text style={styles.footerLabel}>Total:</Text>
             <Text style={styles.footerValue}>${item.totalRevenue}</Text>
           </View>
-          <View style={styles.footerRow}>
-            <Text style={styles.footerLabel}>Profit:</Text>
-            <Text style={[styles.footerValue, styles.profitValue]}>+${item.profit}</Text>
-          </View>
-          {balance > 0 && (
-            <View style={[styles.footerRow, styles.balanceRow]}>
-              <Text style={styles.balanceLabel}>Balance Due:</Text>
-              <Text style={styles.balanceValue}>${balance}</Text>
+          {balance > 0 ? (
+            <>
+              <View style={styles.footerRow}>
+                <Text style={styles.footerLabel}>Paid:</Text>
+                <Text style={[styles.footerValue, styles.paidValueText]}>${item.amountPaid}</Text>
+              </View>
+              <View style={[styles.footerRow, styles.balanceRow]}>
+                <Text style={styles.balanceLabel}>Balance Due:</Text>
+                <Text style={styles.balanceValue}>${balance}</Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.footerRow}>
+              <Text style={styles.footerLabel}>Profit:</Text>
+              <Text style={[styles.footerValue, styles.profitValue]}>+${item.profit}</Text>
             </View>
           )}
         </View>
@@ -157,43 +169,13 @@ export default function SalesScreen() {
   };
 
   const filterButtons = [
+    { label: 'Pending', value: 'partial' as const },
+    { label: 'Completed', value: 'paid' as const },
     { label: 'All', value: 'all' as const },
-    { label: 'Paid', value: 'paid' as const },
-    { label: 'Pending', value: 'pending' as const },
-    { label: 'Partial', value: 'partial' as const },
   ];
 
   return (
     <View style={styles.container}>
-      {/* Stats Overview */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.statsContainer}
-        contentContainerStyle={styles.statsContent}
-      >
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Total Sales</Text>
-          <Text style={styles.statValue}>{sales.length}</Text>
-        </View>
-        <View style={[styles.statCard, styles.revenueCard]}>
-          <Text style={styles.statLabel}>Revenue</Text>
-          <Text style={[styles.statValue, styles.revenueValue]}>${totalRevenue}</Text>
-        </View>
-        <View style={[styles.statCard, styles.profitCard]}>
-          <Text style={styles.statLabel}>Profit</Text>
-          <Text style={[styles.statValue, styles.profitValueStat]}>${totalProfit}</Text>
-        </View>
-        <View style={[styles.statCard, styles.paidCard]}>
-          <Text style={styles.statLabel}>Collected</Text>
-          <Text style={[styles.statValue, styles.paidValue]}>${totalPaid}</Text>
-        </View>
-        <View style={[styles.statCard, styles.pendingCard]}>
-          <Text style={styles.statLabel}>Pending</Text>
-          <Text style={[styles.statValue, styles.pendingValue]}>${totalPending}</Text>
-        </View>
-      </ScrollView>
-
       {/* Filters */}
       <View style={styles.filtersContainer}>
         {filterButtons.map(filter => (
@@ -264,63 +246,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-  },
-  statsContainer: {
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  statsContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 10,
-  },
-  statCard: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    minWidth: 110,
-    minHeight: 75,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  revenueCard: {
-    backgroundColor: '#E3F2FD',
-  },
-  profitCard: {
-    backgroundColor: '#E8F5E9',
-  },
-  paidCard: {
-    backgroundColor: '#E8F5E9',
-  },
-  pendingCard: {
-    backgroundColor: '#FFE5E5',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '600',
-    marginBottom: 5,
-    textAlign: 'center',
-  },
-  statValue: {
-    fontSize: 19,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-  },
-  revenueValue: {
-    color: '#1976D2',
-  },
-  profitValueStat: {
-    color: '#2E7D32',
-  },
-  paidValue: {
-    color: '#34C759',
-  },
-  pendingValue: {
-    color: '#FF3B30',
   },
   filtersContainer: {
     flexDirection: 'row',
@@ -459,6 +384,9 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   profitValue: {
+    color: '#34C759',
+  },
+  paidValueText: {
     color: '#34C759',
   },
   balanceRow: {

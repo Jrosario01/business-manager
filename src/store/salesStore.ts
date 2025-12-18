@@ -1,17 +1,22 @@
 import { create } from 'zustand';
 import { supabase } from '../config/supabase';
 import { useCustomersStore } from './customersStore';
+import { useExchangeRateStore } from './exchangeRateStore';
 import { allocateProductFIFO, applyAllocations, AllocationResult } from '../utils/fifoAllocation';
 
 /**
  * Update shipment totals (revenue and profit) after a sale
+ * Note: Shipments track in USD, but sales happen in DOP
+ * We convert DOP revenue to USD using the exchange rate
  */
 async function updateShipmentTotals(
   allocationResults: Array<{
     product: any;
     productId: string;
     allocation: AllocationResult;
-  }>
+  }>,
+  saleCurrency: 'USD' | 'DOP',
+  exchangeRateUsed: number
 ) {
   // Group allocations by shipment
   const shipmentUpdates: Map<string, { revenue: number; cost: number }> = new Map();
@@ -29,8 +34,15 @@ async function updateShipmentTotals(
 
       if (shipmentItem) {
         const existing = shipmentUpdates.get(shipmentItem.shipment_id) || { revenue: 0, cost: 0 };
+
+        // Convert revenue to USD if sale was in DOP
+        let revenueInUSD = alloc.quantity * product.soldPrice;
+        if (saleCurrency === 'DOP') {
+          revenueInUSD = revenueInUSD / exchangeRateUsed;
+        }
+
         shipmentUpdates.set(shipmentItem.shipment_id, {
-          revenue: existing.revenue + (alloc.quantity * product.soldPrice),
+          revenue: existing.revenue + revenueInUSD,
           cost: existing.cost + (alloc.quantity * alloc.unitCost),
         });
       }
@@ -42,13 +54,13 @@ async function updateShipmentTotals(
     // Get current totals
     const { data: shipment } = await supabase
       .from('shipments')
-      .select('total_revenue, net_profit')
+      .select('total_revenue, net_profit, total_cost')
       .eq('id', shipmentId)
       .single();
 
     if (shipment) {
       const newRevenue = (shipment.total_revenue || 0) + totals.revenue;
-      const newProfit = newRevenue - totals.cost; // Simplified profit calculation
+      const newProfit = newRevenue - (shipment.total_cost || 0);
 
       await supabase
         .from('shipments')
@@ -68,11 +80,13 @@ export interface Sale {
   customerName: string;
   customerId?: string;
   products: SaleProduct[];
-  totalCost: number;  // Calculated from products
-  totalRevenue: number;
+  totalCost: number;  // Calculated from products (in USD)
+  totalRevenue: number;  // In the sale's currency
   profit: number;
   paymentStatus: 'paid' | 'pending' | 'partial';
   amountPaid: number;
+  currency: 'USD' | 'DOP';  // Currency of the sale
+  exchangeRateUsed: number;  // Exchange rate at time of sale
 }
 
 export interface SaleProduct {
@@ -99,6 +113,8 @@ interface SupabaseSale {
   notes?: string;
   created_by?: string;
   created_at: string;
+  currency: 'USD' | 'DOP';
+  exchange_rate_used: number;
 }
 
 interface SupabaseSaleItem {
@@ -170,6 +186,10 @@ export const useSalesStore = create<SalesState>((set, get) => ({
           }
           const avgUnitCost = totalQty > 0 ? totalCost / totalQty : 0;
 
+          const productTotal = item.line_total;
+          const productPaid = item.amount_paid || 0;
+          const productBalance = productTotal - productPaid;
+
           return {
             brand: product?.brand || '',
             name: product?.name || '',
@@ -177,26 +197,43 @@ export const useSalesStore = create<SalesState>((set, get) => ({
             quantity: item.quantity,
             unitCost: avgUnitCost,
             soldPrice: item.unit_price,
-            amountPaid: 0,  // TODO: Calculate per-product payment
-            balance: 0,
+            amountPaid: productPaid,
+            balance: productBalance,
           };
         }));
 
-        const totalCost = products.reduce((sum, p) => sum + (p.unitCost * p.quantity), 0);
+        const productsWithPayment = products;
+
+        const totalCost = productsWithPayment.reduce((sum, p) => sum + (p.unitCost * p.quantity), 0);
         const totalRevenue = sale.total_amount;
-        const profit = totalRevenue - totalCost;
+        const currency = sale.currency || 'DOP';  // Default to DOP
+
+        // Use stored exchange rate, or fallback to current rate from store
+        const { usdToDop } = useExchangeRateStore.getState();
+        const exchangeRateUsed = sale.exchange_rate_used || usdToDop;
+
+        // Calculate profit: If sale is in DOP, convert USD cost to DOP first
+        let profit: number;
+        if (currency === 'DOP') {
+          const totalCostInDOP = totalCost * exchangeRateUsed;
+          profit = totalRevenue - totalCostInDOP;
+        } else {
+          profit = totalRevenue - totalCost;
+        }
 
         return {
           id: sale.id,
           date: sale.sale_date,
           customerName: sale.customer?.name || 'Unknown Customer',
           customerId: sale.customer_id,
-          products,
+          products: productsWithPayment,
           totalCost,
           totalRevenue,
           profit,
           paymentStatus: sale.payment_status === 'layaway' ? 'pending' : sale.payment_status,
           amountPaid: sale.amount_paid,
+          currency,
+          exchangeRateUsed,
         };
       }));
 
@@ -258,13 +295,17 @@ export const useSalesStore = create<SalesState>((set, get) => ({
         });
       }
 
-      // 3. Calculate totals
+      // 3. Calculate totals and get current exchange rate
       const totalRevenue = sale.totalRevenue;
       const totalAmount = totalRevenue;
       const outstandingBalance = totalAmount - sale.amountPaid;
       const paymentStatus: 'paid' | 'partial' | 'layaway' =
         sale.amountPaid >= totalAmount ? 'paid' :
         sale.amountPaid > 0 ? 'partial' : 'layaway';
+
+      // Get current exchange rate for transaction history
+      const { usdToDop } = useExchangeRateStore.getState();
+      const currency = sale.currency || 'DOP';  // Default to DOP since sales happen in DR
 
       // 4. Create sale record
       const { data: saleData, error: saleError } = await supabase
@@ -276,6 +317,8 @@ export const useSalesStore = create<SalesState>((set, get) => ({
           amount_paid: sale.amountPaid,
           outstanding_balance: outstandingBalance,
           payment_status: paymentStatus,
+          currency: currency,
+          exchange_rate_used: usdToDop,
         }])
         .select()
         .single();
@@ -286,7 +329,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       for (const result of allocationResults) {
         const { product, productId, allocation } = result;
 
-        // Create sale item
+        // Create sale item with individual product payment
         const { data: saleItemData, error: itemError } = await supabase
           .from('sale_items')
           .insert([{
@@ -295,6 +338,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
             quantity: product.quantity,
             unit_price: product.soldPrice,
             line_total: product.quantity * product.soldPrice,
+            amount_paid: product.amountPaid || 0,
           }])
           .select()
           .single();
@@ -312,7 +356,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       }
 
       // 6. Update shipment totals (revenue and profit)
-      await updateShipmentTotals(allocationResults);
+      await updateShipmentTotals(allocationResults, currency, usdToDop);
 
       // 7. Reload sales to get the updated list
       await get().loadSales();
@@ -327,11 +371,35 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   updateSale: async (id, saleUpdate) => {
     set({ error: null });
     try {
-      // For now, only support updating payment information
-      if (saleUpdate.amountPaid !== undefined) {
-        const sale = get().sales.find(s => s.id === id);
-        if (!sale) return;
+      const sale = get().sales.find(s => s.id === id);
+      if (!sale) return;
 
+      // Update individual product payments if provided
+      if (saleUpdate.products) {
+        // Get sale items from database
+        const { data: saleItems } = await supabase
+          .from('sale_items')
+          .select('id, product_id')
+          .eq('sale_id', id);
+
+        if (saleItems) {
+          // Update each sale item's amount_paid
+          for (let i = 0; i < saleUpdate.products.length; i++) {
+            const product = saleUpdate.products[i];
+            const saleItem = saleItems[i];
+
+            if (saleItem && product.amountPaid !== undefined) {
+              await supabase
+                .from('sale_items')
+                .update({ amount_paid: product.amountPaid })
+                .eq('id', saleItem.id);
+            }
+          }
+        }
+      }
+
+      // Update sale-level payment information
+      if (saleUpdate.amountPaid !== undefined) {
         const outstandingBalance = sale.totalRevenue - saleUpdate.amountPaid;
         const paymentStatus: 'paid' | 'partial' | 'layaway' =
           saleUpdate.amountPaid >= sale.totalRevenue ? 'paid' :
@@ -347,10 +415,10 @@ export const useSalesStore = create<SalesState>((set, get) => ({
           .eq('id', id);
 
         if (error) throw error;
-
-        // Reload sales
-        await get().loadSales();
       }
+
+      // Reload sales
+      await get().loadSales();
     } catch (error) {
       console.error('Error updating sale:', error);
       set({ error: (error as Error).message });

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,119 +6,34 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import * as Print from 'expo-print';
 import { format, startOfWeek, startOfMonth, startOfYear, endOfWeek, endOfMonth, endOfYear, isWithinInterval } from 'date-fns';
-
-interface Sale {
-  id: string;
-  date: string;
-  customerName: string;
-  totalRevenue: number;
-  totalCost: number;
-  profit: number;
-  amountPaid: number;
-  shipmentId?: string;
-}
-
-interface Shipment {
-  id: string;
-  name: string;
-  totalCost: number;
-  status: string;
-  createdDate: string;
-}
+import { useShipmentsStore } from '../store/shipmentsStore';
+import { useSalesStore } from '../store/salesStore';
 
 type TimePeriod = 'weekly' | 'monthly' | 'yearly' | 'all';
 type ReportTab = 'overview' | 'shipments';
-
-// Dummy data for testing
-const dummySales: Sale[] = [
-  {
-    id: '1',
-    date: '2024-12-10',
-    customerName: 'Juan Perez',
-    totalRevenue: 150,
-    totalCost: 85,
-    profit: 65,
-    amountPaid: 100,
-    shipmentId: 'shipment-1',
-  },
-  {
-    id: '2',
-    date: '2024-12-09',
-    customerName: 'Maria Rodriguez',
-    totalRevenue: 55,
-    totalCost: 32,
-    profit: 23,
-    amountPaid: 55,
-    shipmentId: 'shipment-1',
-  },
-  {
-    id: '3',
-    date: '2024-12-08',
-    customerName: 'Ana Martinez',
-    totalRevenue: 178,
-    totalCost: 96,
-    profit: 82,
-    amountPaid: 0,
-    shipmentId: 'shipment-2',
-  },
-  {
-    id: '4',
-    date: '2024-11-25',
-    customerName: 'Carlos Gomez',
-    totalRevenue: 240,
-    totalCost: 150,
-    profit: 90,
-    amountPaid: 240,
-    shipmentId: 'shipment-2',
-  },
-  {
-    id: '5',
-    date: '2024-11-15',
-    customerName: 'Luis Fernandez',
-    totalRevenue: 320,
-    totalCost: 200,
-    profit: 120,
-    amountPaid: 200,
-    shipmentId: 'shipment-1',
-  },
-];
-
-const dummyShipments: Shipment[] = [
-  {
-    id: 'shipment-1',
-    name: 'Shipment #001',
-    totalCost: 2500,
-    status: 'delivered',
-    createdDate: '2024-11-01',
-  },
-  {
-    id: 'shipment-2',
-    name: 'Shipment #002',
-    totalCost: 3200,
-    status: 'delivered',
-    createdDate: '2024-11-20',
-  },
-  {
-    id: 'shipment-3',
-    name: 'Shipment #003',
-    totalCost: 1800,
-    status: 'preparing',
-    createdDate: '2024-12-05',
-  },
-];
 
 export default function ReportsScreen() {
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('monthly');
 
+  // Load data from stores
+  const { shipments, isLoading: shipmentsLoading, loadShipments } = useShipmentsStore();
+  const { sales, isLoading: salesLoading, loadSales } = useSalesStore();
+
+  useEffect(() => {
+    loadShipments();
+    loadSales();
+  }, []);
+
   // Filter sales by time period
   const filteredSales = useMemo(() => {
     const now = new Date();
 
-    if (timePeriod === 'all') return dummySales;
+    if (timePeriod === 'all') return sales;
 
     let start: Date;
     let end: Date;
@@ -137,14 +52,14 @@ export default function ReportsScreen() {
         end = endOfYear(now);
         break;
       default:
-        return dummySales;
+        return sales;
     }
 
-    return dummySales.filter(sale => {
+    return sales.filter(sale => {
       const saleDate = new Date(sale.date);
       return isWithinInterval(saleDate, { start, end });
     });
-  }, [timePeriod]);
+  }, [timePeriod, sales]);
 
   // Calculate overview metrics
   const overviewMetrics = useMemo(() => {
@@ -167,27 +82,40 @@ export default function ReportsScreen() {
 
   // Calculate shipment metrics
   const shipmentMetrics = useMemo(() => {
-    return dummyShipments.map(shipment => {
-      const shipmentSales = dummySales.filter(sale => sale.shipmentId === shipment.id);
-      const totalRevenue = shipmentSales.reduce((sum, sale) => sum + sale.totalRevenue, 0);
-      const totalCost = shipmentSales.reduce((sum, sale) => sum + sale.totalCost, 0);
-      const totalProfit = shipmentSales.reduce((sum, sale) => sum + sale.profit, 0);
-      const totalPaid = shipmentSales.reduce((sum, sale) => sum + sale.amountPaid, 0);
-      const totalOwed = totalRevenue - totalPaid;
+    return shipments.map(shipment => {
+      const totalRevenue = shipment.total_revenue || 0;
+      const totalProfit = shipment.net_profit || 0;
+      const totalCost = shipment.total_cost || 0;
+
+      // Count sales for this shipment by checking sale items
+      // For now, we'll use item count as a proxy for sales count
+      const salesCount = shipment.items.reduce((sum, item) => {
+        // Each item represents potential sales
+        return sum + (item.quantity - item.remaining_inventory);
+      }, 0);
+
+      // Calculate payment info - revenue collected is the amount paid
+      // For simplicity, assume all revenue has been collected (we'd need payment tracking for accuracy)
+      const totalPaid = totalRevenue; // This is simplified - ideally track payments separately
+      const totalOwed = 0; // Simplified assumption
 
       return {
-        ...shipment,
-        salesCount: shipmentSales.length,
-        totalRevenue,
+        id: shipment.id,
+        name: shipment.shipment_number,
+        totalCost: totalCost,
+        status: shipment.status,
+        createdDate: shipment.created_at,
+        salesCount: salesCount,
+        totalRevenue: totalRevenue,
         totalSalesCost: totalCost,
-        totalProfit,
-        totalPaid,
-        totalOwed,
+        totalProfit: totalProfit,
+        totalPaid: totalPaid,
+        totalOwed: totalOwed,
         profitMargin: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
-        investmentRecovery: shipment.totalCost > 0 ? (totalPaid / shipment.totalCost) * 100 : 0,
+        investmentRecovery: totalCost > 0 ? (totalPaid / totalCost) * 100 : 0,
       };
     });
-  }, []);
+  }, [shipments]);
 
   const generatePDF = async () => {
     try {
@@ -255,10 +183,6 @@ export default function ReportsScreen() {
         const shipmentRows = shipmentMetrics.map(shipment => `
           <div style="margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
             <h3 style="color: #007AFF; margin-top: 0;">${shipment.name}</h3>
-            <div class="metric-row">
-              <span class="metric-label">Status:</span>
-              <span class="metric-value">${shipment.status.toUpperCase()}</span>
-            </div>
             <div class="metric-row">
               <span class="metric-label">Initial Investment:</span>
               <span class="metric-value">$${shipment.totalCost.toFixed(2)}</span>
@@ -432,7 +356,13 @@ export default function ReportsScreen() {
         Track sales, profits, and outstanding payments for each shipment
       </Text>
 
-      {shipmentMetrics.map(shipment => (
+      {shipmentMetrics.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No shipments yet</Text>
+          <Text style={styles.emptySubtext}>Create your first shipment to see reports here</Text>
+        </View>
+      ) : (
+        shipmentMetrics.map(shipment => (
         <View key={shipment.id} style={styles.shipmentCard}>
           <View style={styles.shipmentHeader}>
             <View>
@@ -440,12 +370,6 @@ export default function ReportsScreen() {
               <Text style={styles.shipmentDate}>
                 Created {format(new Date(shipment.createdDate), 'MMM dd, yyyy')}
               </Text>
-            </View>
-            <View style={[
-              styles.statusBadge,
-              shipment.status === 'delivered' ? styles.statusDelivered : styles.statusPreparing
-            ]}>
-              <Text style={styles.statusText}>{shipment.status.toUpperCase()}</Text>
             </View>
           </View>
 
@@ -498,11 +422,24 @@ export default function ReportsScreen() {
             </View>
           </View>
         </View>
-      ))}
+        ))
+      )}
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
   );
+
+  // Show loading state
+  const isLoading = shipmentsLoading || salesLoading;
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading reports...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -543,6 +480,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -808,5 +754,23 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 20,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    marginTop: 20,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 6,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
   },
 });

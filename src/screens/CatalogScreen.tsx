@@ -9,10 +9,13 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import AddProductModal from '../components/AddProductModal';
 import EditProductModal from '../components/EditProductModal';
 import { useProductsStore, SupabaseProduct } from '../store/productsStore';
+import { useExchangeRateStore } from '../store/exchangeRateStore';
 
 export default function CatalogScreen() {
   const {
@@ -24,6 +27,8 @@ export default function CatalogScreen() {
     deleteProduct,
     getBrands,
   } = useProductsStore();
+
+  const { usdToDop } = useExchangeRateStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
@@ -94,9 +99,19 @@ export default function CatalogScreen() {
           </View>
           <Text style={styles.productBrand}>{product.brand}</Text>
         </View>
-        <View style={styles.productCost}>
-          <Text style={styles.costLabel}>Cost</Text>
-          <Text style={styles.costValue}>${product.cost}</Text>
+        <View style={styles.productPrices}>
+          <View style={styles.priceBox}>
+            <Text style={styles.priceLabel}>Cost</Text>
+            <Text style={styles.priceValue}>
+              ${product.cost} (${(product.cost * usdToDop).toFixed(0)})
+            </Text>
+          </View>
+          <View style={[styles.priceBox, styles.saleBox]}>
+            <Text style={[styles.priceLabel, styles.saleLabel]}>Sale</Text>
+            <Text style={[styles.priceValue, styles.saleValue]}>
+              ${(product.sale_price || (product.cost * 2 * usdToDop)).toFixed(0)}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -117,12 +132,12 @@ export default function CatalogScreen() {
     );
   };
 
-  const handleAddProduct = async (newProductsList: { brand: string; name: string; size: string; cost: number; image?: string }[]) => {
+  const handleAddProduct = async (newProductsList: { brand: string; name: string; size: string; cost: number; sale_price?: number; image?: string }[]) => {
     await addProducts(newProductsList);
     setIsAddModalVisible(false);
   };
 
-  const handleEditProduct = async (updatedProduct: { id: string; brand: string; name: string; size: string; cost: number; image?: string }) => {
+  const handleEditProduct = async (updatedProduct: { id: string; brand: string; name: string; size: string; cost: number; sale_price?: number; image?: string }) => {
     const { id, ...productData } = updatedProduct;
     await updateProduct(id, productData);
     setIsEditModalVisible(false);
@@ -149,15 +164,21 @@ export default function CatalogScreen() {
   return (
     <View style={styles.container}>
       {/* Compact header with search, stats and add button */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={['#667eea', '#764ba2']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <View style={styles.searchRow}>
           <View style={styles.searchContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
               placeholder="Search products..."
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholderTextColor="#999"
+              placeholderTextColor="rgba(255,255,255,0.7)"
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity
@@ -169,11 +190,17 @@ export default function CatalogScreen() {
             )}
           </View>
         </View>
-        
+
         <View style={styles.actionRow}>
-          <Text style={styles.statsText}>
-            {filteredProducts.length} products • {brands.length} brands
-          </Text>
+          <View style={styles.statsContainer}>
+            <Text style={styles.statsText}>
+              {filteredProducts.length} products
+            </Text>
+            <Text style={styles.statsDot}>•</Text>
+            <Text style={styles.statsText}>
+              {brands.length} brands
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => setIsAddModalVisible(true)}
@@ -181,7 +208,7 @@ export default function CatalogScreen() {
             <Text style={styles.addButtonText}>+ Add</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
       <AddProductModal
         visible={isAddModalVisible}
@@ -226,109 +253,141 @@ export default function CatalogScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f8f9fa',
   },
   header: {
-    backgroundColor: 'white',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 50 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
   searchRow: {
-    marginBottom: 10,
+    marginBottom: 12,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  searchIcon: {
+    fontSize: 18,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
     padding: 10,
-    fontSize: 15,
+    fontSize: 16,
+    color: 'white',
+    fontWeight: '500',
   },
   clearButton: {
-    marginLeft: 10,
     padding: 8,
   },
   clearButtonText: {
     fontSize: 20,
-    color: '#999',
+    color: 'white',
+    fontWeight: 'bold',
   },
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   statsText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-    flex: 1,
+    fontSize: 13,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  statsDot: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
   },
   addButton: {
-    backgroundColor: '#34C759',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   addButtonText: {
-    color: 'white',
-    fontSize: 14,
+    color: '#667eea',
+    fontSize: 15,
     fontWeight: 'bold',
   },
   listContent: {
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
   brandSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   brandHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingBottom: 6,
-    borderBottomWidth: 2,
-    borderBottomColor: '#007AFF',
+    marginBottom: 12,
+    paddingBottom: 10,
+    paddingHorizontal: 4,
+    borderBottomWidth: 3,
+    borderBottomColor: '#667eea',
   },
   brandTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#667eea',
     flex: 1,
+    letterSpacing: 0.5,
   },
   brandTitleCompact: {
-    fontSize: 16,
+    fontSize: 18,
   },
   brandCount: {
     fontSize: 13,
-    color: '#666',
-    fontWeight: '600',
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    minWidth: 28,
+    color: '#667eea',
+    fontWeight: 'bold',
+    backgroundColor: '#f0f0ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 32,
     textAlign: 'center',
+    borderWidth: 2,
+    borderColor: '#667eea',
   },
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#667eea',
   },
   productRowCompact: {
-    padding: 10,
+    padding: 12,
   },
   productImageContainer: {
     marginRight: 12,
@@ -337,20 +396,24 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   productImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
+    width: 70,
+    height: 70,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#e9ecef',
   },
   placeholderImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    backgroundColor: '#f0f0f0',
+    width: 70,
+    height: 70,
+    borderRadius: 14,
+    backgroundColor: '#f8f9fa',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e9ecef',
   },
   placeholderText: {
-    fontSize: 28,
+    fontSize: 32,
   },
   productInfo: {
     flex: 1,
@@ -359,43 +422,69 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    gap: 8,
+    marginBottom: 4,
     flexWrap: 'wrap',
   },
   productName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#212529',
     flexShrink: 1,
   },
   productSize: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#666',
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#667eea',
+    backgroundColor: '#f0f0ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#667eea',
   },
   productBrand: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#007AFF',
+    fontWeight: 'bold',
+    color: '#6c757d',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  productPrices: {
+    alignItems: 'flex-end',
+    marginLeft: 12,
+    gap: 6,
+  },
+  priceBox: {
+    backgroundColor: '#f0f0ff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#667eea',
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  saleBox: {
+    backgroundColor: '#e8f5e9',
+    borderColor: '#34C759',
+  },
+  priceLabel: {
+    fontSize: 9,
+    color: '#667eea',
+    marginBottom: 2,
+    fontWeight: 'bold',
     textTransform: 'uppercase',
   },
-  productCost: {
-    alignItems: 'flex-end',
-    marginLeft: 8,
+  saleLabel: {
+    color: '#34C759',
   },
-  costLabel: {
-    fontSize: 10,
-    color: '#999',
-    marginBottom: 2,
-  },
-  costValue: {
-    fontSize: 16,
+  priceValue: {
+    fontSize: 13,
     fontWeight: 'bold',
+    color: '#667eea',
+  },
+  saleValue: {
     color: '#34C759',
   },
   emptyContainer: {

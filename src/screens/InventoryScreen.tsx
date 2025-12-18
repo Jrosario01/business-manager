@@ -20,6 +20,7 @@ interface ConsolidatedProduct {
   name: string;
   size: string;
   imageUrl?: string;
+  salePrice?: number;
   totalQuantity: number;
   totalValue: number;
   shipments: Array<{
@@ -57,6 +58,7 @@ export default function InventoryScreen() {
             name: item.product.name,
             size: item.product.size,
             imageUrl: item.product.image_url,
+            salePrice: item.product.sale_price,
             totalQuantity: 0,
             totalValue: 0,
             shipments: [],
@@ -105,6 +107,31 @@ export default function InventoryScreen() {
       )
     );
   }, [shipments, searchQuery]);
+
+  // Calculate inventory statistics
+  const inventoryStats = useMemo(() => {
+    const totalUnits = shipments.reduce((sum, s) =>
+      sum + s.items.reduce((itemSum, i) => itemSum + i.remaining_inventory, 0), 0
+    );
+    const totalValue = shipments.reduce((sum, s) =>
+      sum + s.items.reduce((itemSum, i) => itemSum + (i.remaining_inventory * i.unit_cost), 0), 0
+    );
+
+    // Calculate total units ordered and sold for turnover
+    const totalUnitsOrdered = shipments.reduce((sum, s) =>
+      sum + s.items.reduce((itemSum, i) => itemSum + i.quantity, 0), 0
+    );
+    const soldUnits = totalUnitsOrdered - totalUnits;
+    const inventoryTurnover = totalUnitsOrdered > 0 ? ((soldUnits / totalUnitsOrdered) * 100) : 0;
+
+    return {
+      totalUnits,
+      totalValue,
+      soldUnits,
+      totalUnitsOrdered,
+      inventoryTurnover,
+    };
+  }, [shipments]);
 
   const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
 
@@ -156,6 +183,15 @@ export default function InventoryScreen() {
 
       {/* Content */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Inventory Stats */}
+        <View style={styles.statsSection}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Total Inventory</Text>
+            <Text style={styles.statValue}>{inventoryStats.totalUnits}</Text>
+            <Text style={styles.statSubtext}>units in stock</Text>
+          </View>
+        </View>
+
         {viewMode === 'consolidated' ? (
           // CONSOLIDATED VIEW
           <View>
@@ -188,14 +224,9 @@ export default function InventoryScreen() {
                       <Text style={styles.productSize}>{product.size}</Text>
                       <View style={styles.productMetrics}>
                         <Text style={styles.totalQuantity}>{product.totalQuantity} units</Text>
-                        <DualCurrencyText
-                          usdAmount={product.totalValue}
-                          primaryCurrency="USD"
-                          layout="horizontal"
-                          style={styles.totalValue}
-                          secondaryStyle={styles.totalValueSecondary}
-                          showLabels={false}
-                        />
+                        <Text style={styles.salePriceText}>
+                          ${product.salePrice?.toFixed(0) || '0'} /unit
+                        </Text>
                       </View>
                     </View>
                   </View>
@@ -273,14 +304,9 @@ export default function InventoryScreen() {
                           </View>
                           <View style={styles.shipmentProductStats}>
                             <Text style={styles.shipmentProductQty}>{item.remaining_inventory} units</Text>
-                            <DualCurrencyText
-                              usdAmount={item.remaining_inventory * item.unit_cost}
-                              primaryCurrency="USD"
-                              layout="vertical"
-                              style={styles.shipmentProductValue}
-                              secondaryStyle={styles.shipmentProductValueSecondary}
-                              showLabels={false}
-                            />
+                            <Text style={styles.shipmentSalePrice}>
+                              ${item.product?.sale_price?.toFixed(0) || '0'} /unit
+                            </Text>
                           </View>
                         </View>
                       ))}
@@ -488,7 +514,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -581,5 +607,51 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 20,
+  },
+  statsSection: {
+    marginBottom: 12,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statCard: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  halfCard: {
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  statSubtext: {
+    fontSize: 12,
+    color: '#999',
+  },
+  salePriceText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#34C759',
+  },
+  shipmentSalePrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#34C759',
   },
 });

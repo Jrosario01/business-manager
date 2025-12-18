@@ -41,12 +41,6 @@ export default function HomeScreen() {
 
   // Calculate comprehensive statistics
   const statistics = useMemo(() => {
-    // Investment metrics (from shipments)
-    const totalInvestment = shipments.reduce((sum, s) => sum + s.total_cost, 0);
-    const totalRevenue = shipments.reduce((sum, s) => sum + (s.total_revenue || 0), 0);
-    const totalProfit = shipments.reduce((sum, s) => sum + (s.net_profit || 0), 0);
-    const overallROI = totalInvestment > 0 ? ((totalProfit / totalInvestment) * 100) : 0;
-
     // Inventory metrics
     const totalInventoryUnits = shipments.reduce((sum, s) =>
       sum + s.items.reduce((itemSum, i) => itemSum + i.remaining_inventory, 0), 0
@@ -62,47 +56,12 @@ export default function HomeScreen() {
     const soldUnits = totalUnitsOrdered - totalInventoryUnits;
     const inventoryTurnover = totalUnitsOrdered > 0 ? ((soldUnits / totalUnitsOrdered) * 100) : 0;
 
-    // Sales metrics
-    const totalSales = sales.length;
-    const totalSalesValue = sales.reduce((sum, s) =>
-      sum + s.products.reduce((pSum, p) => pSum + (p.quantity * s.salePrice), 0), 0
-    );
-
-    // Shipment metrics
-    const activeShipments = shipments.filter(s =>
-      s.status === 'preparing' || s.status === 'shipped' || s.status === 'delivered'
-    ).length;
-    const settledShipments = shipments.filter(s => s.status === 'settled').length;
-
-    // Profitability metrics
-    const profitableShipments = shipments.filter(s => (s.net_profit || 0) > 0).length;
-    const profitMargin = totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100) : 0;
-
     return {
-      // Investment
-      totalInvestment,
-      totalRevenue,
-      totalProfit,
-      overallROI,
-
       // Inventory
       totalInventoryUnits,
       totalInventoryValue,
       inventoryTurnover,
       soldUnits,
-
-      // Sales
-      totalSales,
-      totalSalesValue,
-
-      // Shipments
-      totalShipments: shipments.length,
-      activeShipments,
-      settledShipments,
-
-      // Profitability
-      profitableShipments,
-      profitMargin,
     };
   }, [shipments, sales]);
 
@@ -140,69 +99,6 @@ export default function HomeScreen() {
           <Text style={styles.currencyButtonText}>💱</Text>
           <Text style={styles.currencyRate}>1 USD = {usdToDop.toFixed(2)} DOP</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Investment Overview */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>💰 Investment Overview</Text>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Total Investment</Text>
-          <DualCurrencyText
-            usdAmount={statistics.totalInvestment}
-            primaryCurrency="USD"
-            layout="vertical"
-            style={styles.statValue}
-            secondaryStyle={styles.statSubtext}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.statCard, styles.halfCard]}>
-            <Text style={styles.statLabel}>Revenue</Text>
-            <DualCurrencyText
-              usdAmount={statistics.totalRevenue}
-              primaryCurrency="USD"
-              layout="vertical"
-              style={[styles.statValue, styles.revenueText]}
-              secondaryStyle={styles.statSubtext}
-            />
-          </View>
-          <View style={[styles.statCard, styles.halfCard]}>
-            <Text style={styles.statLabel}>Profit</Text>
-            <DualCurrencyText
-              usdAmount={statistics.totalProfit}
-              primaryCurrency="USD"
-              layout="vertical"
-              style={[
-                styles.statValue,
-                statistics.totalProfit >= 0 ? styles.profitText : styles.lossText
-              ]}
-              secondaryStyle={styles.statSubtext}
-            />
-          </View>
-        </View>
-
-        <View style={styles.row}>
-          <View style={[styles.statCard, styles.halfCard]}>
-            <Text style={styles.statLabel}>ROI</Text>
-            <Text style={[
-              styles.statValue,
-              statistics.overallROI >= 0 ? styles.profitText : styles.lossText
-            ]}>
-              {formatPercent(statistics.overallROI)}
-            </Text>
-          </View>
-          <View style={[styles.statCard, styles.halfCard]}>
-            <Text style={styles.statLabel}>Profit Margin</Text>
-            <Text style={[
-              styles.statValue,
-              statistics.profitMargin >= 0 ? styles.profitText : styles.lossText
-            ]}>
-              {formatPercent(statistics.profitMargin)}
-            </Text>
-          </View>
-        </View>
       </View>
 
       {/* Inventory Status */}

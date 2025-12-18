@@ -140,6 +140,10 @@ export default function ShipmentDetailsScreen() {
   const roi = shipment.total_cost > 0 ? ((shipment.net_profit / shipment.total_cost) * 100).toFixed(1) : '0';
   const completionPercentage = totalUnits > 0 ? ((soldUnits / totalUnits) * 100).toFixed(0) : '0';
 
+  // Calculate product costs and shipping per item
+  const productCosts = shipment.items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
+  const shippingPerItem = totalUnits > 0 ? shipment.shipping_cost / totalUnits : 0;
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -179,19 +183,25 @@ export default function ShipmentDetailsScreen() {
           <Text style={styles.cardTitle}>Financial Summary</Text>
 
           <View style={styles.metricRow}>
-            <Text style={styles.metricLabel}>Total Investment</Text>
-            <Text style={styles.metricValue}>{formatCurrency(shipment.total_cost)}</Text>
+            <Text style={styles.metricLabel}>Product Costssss</Text>
+            <Text style={styles.metricValue}>{formatCurrency(productCosts)}</Text>
           </View>
 
-          <View style={styles.metricBreakdown}>
-            <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>• Shipping Cost</Text>
-              <Text style={styles.breakdownValue}>{formatCurrency(shipment.shipping_cost)}</Text>
-            </View>
-            <View style={styles.breakdownRow}>
-              <Text style={styles.breakdownLabel}>• Additional Costs</Text>
-              <Text style={styles.breakdownValue}>{formatCurrency(shipment.additional_costs || 0)}</Text>
-            </View>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Shipping Cost</Text>
+            <Text style={styles.metricValue}>
+              {formatCurrency(shipment.shipping_cost)} ({formatCurrency(shippingPerItem)}/item)
+            </Text>
+          </View>
+
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Additional Costs</Text>
+            <Text style={styles.metricValue}>{formatCurrency(shipment.additional_costs || 0)}</Text>
+          </View>
+
+          <View style={[styles.metricRow, styles.totalRow]}>
+            <Text style={styles.totalLabel}>Total Investment</Text>
+            <Text style={styles.totalValue}>{formatCurrency(shipment.total_cost)}</Text>
           </View>
 
           <View style={[styles.metricRow, styles.marginTop]}>
@@ -261,7 +271,7 @@ export default function ShipmentDetailsScreen() {
                   </View>
                   <View style={styles.statItem}>
                     <Text style={styles.statLabel}>Unit Cost</Text>
-                    <Text style={styles.statValue}>{formatCurrency(item.unit_cost)}</Text>
+                    <Text style={styles.statValue}>{formatCurrency((item.product?.cost || item.unit_cost) + shippingPerItem)}</Text>
                   </View>
                 </View>
 
@@ -457,6 +467,22 @@ const styles = StyleSheet.create({
   },
   marginTop: {
     marginTop: 8,
+  },
+  totalRow: {
+    paddingTop: 12,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  totalLabel: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  totalValue: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#333',
   },
   progressSection: {
     marginTop: 20,
