@@ -48,6 +48,23 @@ export interface ShipmentWithItems extends SupabaseShipment {
   items: SupabaseShipmentItem[];
 }
 
+// Allocation data returned from RPC function
+export interface ShipmentSalesAllocation {
+  sale_id: string;
+  sale_date: string;
+  sale_total_amount: number;
+  sale_amount_paid: number;
+  sale_currency: string;
+  sale_exchange_rate: number;
+  sale_item_id: string;
+  product_id: string;
+  sale_item_quantity: number;
+  sale_item_unit_price: number;
+  sale_item_amount_paid: number;
+  allocation_quantity: number;
+  allocation_unit_cost: number;
+}
+
 interface ShipmentsState {
   shipments: ShipmentWithItems[];
   isLoading: boolean;
@@ -72,6 +89,9 @@ interface ShipmentsState {
   // Filters
   searchShipments: (query: string) => ShipmentWithItems[];
   getShipmentsByStatus: (status: string) => ShipmentWithItems[];
+
+  // Allocations
+  getShipmentSalesAllocations: (shipmentId: string) => Promise<ShipmentSalesAllocation[]>;
 }
 
 export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
@@ -381,5 +401,20 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
 
   getShipmentsByStatus: (status) => {
     return get().shipments.filter(s => s.status === status);
+  },
+
+  // Get sales allocations for a shipment (for accurate revenue/payment calculations)
+  getShipmentSalesAllocations: async (shipmentId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('get_shipment_sales_with_allocations', {
+        p_shipment_id: shipmentId
+      });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting shipment allocations:', error);
+      return [];
+    }
   },
 }));

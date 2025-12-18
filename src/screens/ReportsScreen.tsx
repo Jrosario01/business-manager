@@ -7,11 +7,14 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import * as Print from 'expo-print';
 import { format, startOfWeek, startOfMonth, startOfYear, endOfWeek, endOfMonth, endOfYear, isWithinInterval } from 'date-fns';
+import { PieChart } from 'react-native-chart-kit';
 import { useShipmentsStore } from '../store/shipmentsStore';
 import { useSalesStore } from '../store/salesStore';
+import { useExchangeRateStore } from '../store/exchangeRateStore';
 
 type TimePeriod = 'weekly' | 'monthly' | 'yearly' | 'all';
 type ReportTab = 'overview' | 'shipments';
@@ -19,15 +22,48 @@ type ReportTab = 'overview' | 'shipments';
 export default function ReportsScreen() {
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('monthly');
+  const [shipmentsAllocations, setShipmentsAllocations] = useState<Map<string, any[]>>(new Map());
+  const [allocationsLoading, setAllocationsLoading] = useState(false);
 
   // Load data from stores
-  const { shipments, isLoading: shipmentsLoading, loadShipments } = useShipmentsStore();
+  const { shipments, isLoading: shipmentsLoading, loadShipments, getShipmentSalesAllocations } = useShipmentsStore();
   const { sales, isLoading: salesLoading, loadSales } = useSalesStore();
+  const { usdToDop } = useExchangeRateStore();
 
   useEffect(() => {
     loadShipments();
     loadSales();
   }, []);
+
+  // Load allocation data for all shipments
+  useEffect(() => {
+    const loadAllocations = async () => {
+      if (shipments.length === 0) return;
+
+      setAllocationsLoading(true);
+      const allocationsMap = new Map();
+
+      for (const shipment of shipments) {
+        const allocations = await getShipmentSalesAllocations(shipment.id);
+        allocationsMap.set(shipment.id, allocations);
+      }
+
+      setShipmentsAllocations(allocationsMap);
+      setAllocationsLoading(false);
+    };
+
+    loadAllocations();
+  }, [shipments, getShipmentSalesAllocations]);
+
+  // Log exchange rate for debugging
+  useEffect(() => {
+    console.log('Exchange rate (USD to DOP):', usdToDop);
+  }, [usdToDop]);
+
+  // Format currency in pesos with thousand separators
+  const formatPesos = (amount: number) => {
+    return `$${Math.round(amount).toLocaleString('en-US')}`;
+  };
 
   // Filter sales by time period
   const filteredSales = useMemo(() => {
@@ -64,58 +100,225 @@ export default function ReportsScreen() {
   // Calculate overview metrics
   const overviewMetrics = useMemo(() => {
     const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.totalRevenue, 0);
-    const totalCost = filteredSales.reduce((sum, sale) => sum + sale.totalCost, 0);
+    const totalCostUSD = filteredSales.reduce((sum, sale) => sum + sale.totalCost, 0);
     const totalProfit = filteredSales.reduce((sum, sale) => sum + sale.profit, 0);
     const totalPaid = filteredSales.reduce((sum, sale) => sum + sale.amountPaid, 0);
     const totalOwed = totalRevenue - totalPaid;
 
+    // Convert cost to DOP for display consistency (sales are in DOP)
+    const totalCostDOP = totalCostUSD * usdToDop;
+
     return {
       salesCount: filteredSales.length,
       totalRevenue,
-      totalCost,
+      totalCost: totalCostDOP,  // Now in DOP
       totalProfit,
       totalPaid,
       totalOwed,
       profitMargin: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
+      collectionRate: totalRevenue > 0 ? (totalPaid / totalRevenue) * 100 : 0,
     };
+  }, [filteredSales, usdToDop]);
+
+  // Calculate payment status breakdown
+  const paymentStatusData = useMemo(() => {
+    const paid = filteredSales.filter(s => s.paymentStatus === 'paid').length;
+    const partial = filteredSales.filter(s => s.paymentStatus === 'partial').length;
+    const pending = filteredSales.filter(s => s.paymentStatus === 'pending').length;
+
+    return [
+      { name: 'Paid', count: paid, color: '#34C759', legendFontColor: '#666', legendFontSize: 12 },
+      { name: 'Partial', count: partial, color: '#FF9500', legendFontColor: '#666', legendFontSize: 12 },
+      { name: 'Pending', count: pending, color: '#FF3B30', legendFontColor: '#666', legendFontSize: 12 },
+    ].filter(item => item.count > 0); // Only show statuses that exist
   }, [filteredSales]);
 
-  // Calculate shipment metrics
+  // Calculate top selling products
+  const topProductsData = useMemo(() => {
+    // Aggregate products by brand + name + size
+    const productMap = new Map<string, { brand: string; name: string; size: string; revenue: number; quantity: number }>();
+
+    filteredSales.forEach(sale => {
+      sale.products.forEach(product => {
+        const key = `${product.brand}-${product.name}-${product.size}`;
+        const existing = productMap.get(key);
+
+        if (existing) {
+          existing.revenue += product.quantity * product.soldPrice;
+          existing.quantity += product.quantity;
+        } else {
+          productMap.set(key, {
+            brand: product.brand,
+            name: product.name,
+            size: product.size || '',
+            revenue: product.quantity * product.soldPrice,
+            quantity: product.quantity,
+          });
+        }
+      });
+    });
+
+    // Convert to array and sort by revenue
+    return Array.from(productMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5); // Top 5 products
+  }, [filteredSales]);
+
+  // Calculate shipment metrics using allocation data (100% accurate)
   const shipmentMetrics = useMemo(() => {
     return shipments.map(shipment => {
-      const totalRevenue = shipment.total_revenue || 0;
-      const totalProfit = shipment.net_profit || 0;
-      const totalCost = shipment.total_cost || 0;
+      const totalCostUSD = shipment.total_cost || 0;
+      const totalCostDOP = totalCostUSD * usdToDop;
 
-      // Count sales for this shipment by checking sale items
-      // For now, we'll use item count as a proxy for sales count
-      const salesCount = shipment.items.reduce((sum, item) => {
-        // Each item represents potential sales
-        return sum + (item.quantity - item.remaining_inventory);
-      }, 0);
+      // Calculate total units and sold units
+      const totalUnits = shipment.items.reduce((sum, item) => sum + item.quantity, 0);
+      const remainingUnits = shipment.items.reduce((sum, item) => sum + item.remaining_inventory, 0);
+      const soldUnits = totalUnits - remainingUnits;
 
-      // Calculate payment info - revenue collected is the amount paid
-      // For simplicity, assume all revenue has been collected (we'd need payment tracking for accuracy)
-      const totalPaid = totalRevenue; // This is simplified - ideally track payments separately
-      const totalOwed = 0; // Simplified assumption
+      // Get allocation data for this shipment
+      const allocations = shipmentsAllocations.get(shipment.id) || [];
+
+      // Group allocations by sale_id to calculate per-sale metrics
+      const salesMap = new Map<string, {
+        saleId: string;
+        totalAmount: number;
+        amountPaid: number;
+        currency: string;
+        exchangeRate: number;
+        revenue: number;
+        cost: number;
+      }>();
+
+      allocations.forEach((alloc: any) => {
+        if (!salesMap.has(alloc.sale_id)) {
+          salesMap.set(alloc.sale_id, {
+            saleId: alloc.sale_id,
+            totalAmount: alloc.sale_total_amount,
+            amountPaid: alloc.sale_amount_paid,
+            currency: alloc.sale_currency,
+            exchangeRate: alloc.sale_exchange_rate,
+            revenue: 0,
+            cost: 0,
+          });
+        }
+
+        const sale = salesMap.get(alloc.sale_id)!;
+        // Revenue from this allocation (quantity * unit price)
+        sale.revenue += alloc.allocation_quantity * alloc.sale_item_unit_price;
+        // Cost from this allocation (quantity * unit cost in USD)
+        sale.cost += alloc.allocation_quantity * alloc.allocation_unit_cost;
+      });
+
+      // Calculate totals from allocations
+      let totalRevenue = 0;
+      let totalCost = 0;
+      let totalPaid = 0;
+
+      for (const [saleId, sale] of salesMap) {
+        // Revenue is already in the sale's currency (DOP)
+        totalRevenue += sale.revenue;
+
+        // Cost is in USD, convert to DOP if sale is in DOP
+        const costInDOP = sale.currency === 'DOP' ? sale.cost * sale.exchangeRate : sale.cost;
+        totalCost += costInDOP;
+
+        // Calculate proportion of payment that belongs to this shipment
+        const proportion = sale.totalAmount > 0 ? sale.revenue / sale.totalAmount : 0;
+        totalPaid += sale.amountPaid * proportion;
+      }
+
+      const totalProfit = totalRevenue - totalCost;
+      const totalOwed = totalRevenue - totalPaid;
 
       return {
         id: shipment.id,
         name: shipment.shipment_number,
-        totalCost: totalCost,
+        totalCost: totalCostDOP,
         status: shipment.status,
         createdDate: shipment.created_at,
-        salesCount: salesCount,
-        totalRevenue: totalRevenue,
-        totalSalesCost: totalCost,
-        totalProfit: totalProfit,
-        totalPaid: totalPaid,
+        soldUnits: soldUnits,
+        remainingUnits: remainingUnits,
+        totalRevenue: totalRevenue,        // 100% accurate from allocations
+        totalProfit: totalProfit,          // 100% accurate from allocations
+        totalPaid: totalPaid,              // Proportional based on allocation revenue
         totalOwed: totalOwed,
         profitMargin: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
-        investmentRecovery: totalCost > 0 ? (totalPaid / totalCost) * 100 : 0,
+        investmentRecovery: totalCostDOP > 0 ? (totalPaid / totalCostDOP) * 100 : 0,
       };
     });
-  }, [shipments]);
+  }, [shipments, shipmentsAllocations, usdToDop]);
+
+  const generateIndividualPDF = async (shipmentId: string) => {
+    try {
+      const shipment = shipmentMetrics.find(s => s.id === shipmentId);
+      if (!shipment) return;
+
+      const htmlContent = `
+        <html>
+          <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; }
+              h1 { color: #007AFF; margin-bottom: 10px; }
+              .metric-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+              .metric-label { font-weight: bold; color: #666; }
+              .metric-value { color: #333; font-size: 16px; }
+              .profit { color: #34C759; }
+              .owed { color: #FF3B30; }
+              .date { color: #999; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <h1>Shipment Report: ${shipment.name}</h1>
+            <p class="date">Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
+            <p class="date">Created: ${format(new Date(shipment.createdDate), 'MMMM dd, yyyy')}</p>
+
+            <div class="metric-row">
+              <span class="metric-label">Initial Investment:</span>
+              <span class="metric-value">${formatPesos(shipment.totalCost)}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Units Sold / Remaining:</span>
+              <span class="metric-value">${shipment.soldUnits} / ${shipment.remainingUnits}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Revenue Generated:</span>
+              <span class="metric-value">${formatPesos(shipment.totalRevenue)}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Profit Earned:</span>
+              <span class="metric-value profit">${formatPesos(shipment.totalProfit)}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Amount Collected:</span>
+              <span class="metric-value">${formatPesos(shipment.totalPaid)}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Amount Owed:</span>
+              <span class="metric-value owed">${formatPesos(shipment.totalOwed)}</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Investment Recovery:</span>
+              <span class="metric-value">${shipment.investmentRecovery.toFixed(1)}%</span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Profit Margin:</span>
+              <span class="metric-value">${shipment.profitMargin.toFixed(1)}%</span>
+            </div>
+          </body>
+        </html>
+      `;
+
+      await Print.printAsync({
+        html: htmlContent,
+      });
+
+      Alert.alert('Success', 'Shipment report exported successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      Alert.alert('Error', 'Failed to generate PDF report');
+    }
+  };
 
   const generatePDF = async () => {
     try {
@@ -185,27 +388,27 @@ export default function ReportsScreen() {
             <h3 style="color: #007AFF; margin-top: 0;">${shipment.name}</h3>
             <div class="metric-row">
               <span class="metric-label">Initial Investment:</span>
-              <span class="metric-value">$${shipment.totalCost.toFixed(2)}</span>
+              <span class="metric-value">${formatPesos(shipment.totalCost)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Sales Count:</span>
-              <span class="metric-value">${shipment.salesCount}</span>
+              <span class="metric-label">Units Sold / Remaining:</span>
+              <span class="metric-value">${shipment.soldUnits} / ${shipment.remainingUnits}</span>
             </div>
             <div class="metric-row">
               <span class="metric-label">Total Revenue:</span>
-              <span class="metric-value">$${shipment.totalRevenue.toFixed(2)}</span>
+              <span class="metric-value">${formatPesos(shipment.totalRevenue)}</span>
             </div>
             <div class="metric-row">
               <span class="metric-label">Total Profit:</span>
-              <span class="metric-value profit">$${shipment.totalProfit.toFixed(2)}</span>
+              <span class="metric-value profit">${formatPesos(shipment.totalProfit)}</span>
             </div>
             <div class="metric-row">
               <span class="metric-label">Amount Collected:</span>
-              <span class="metric-value">$${shipment.totalPaid.toFixed(2)}</span>
+              <span class="metric-value">${formatPesos(shipment.totalPaid)}</span>
             </div>
             <div class="metric-row">
               <span class="metric-label">Amount Owed:</span>
-              <span class="metric-value owed">$${shipment.totalOwed.toFixed(2)}</span>
+              <span class="metric-value owed">${formatPesos(shipment.totalOwed)}</span>
             </div>
             <div class="metric-row">
               <span class="metric-label">Investment Recovery:</span>
@@ -286,7 +489,7 @@ export default function ReportsScreen() {
           <View style={[styles.metricCard, styles.revenueCard]}>
             <Text style={styles.metricLabel}>Total Revenue</Text>
             <Text style={[styles.metricValue, styles.revenueValue]}>
-              ${overviewMetrics.totalRevenue.toFixed(2)}
+              {formatPesos(overviewMetrics.totalRevenue)}
             </Text>
             <Text style={styles.metricSubtext}>{overviewMetrics.salesCount} sales</Text>
           </View>
@@ -294,7 +497,7 @@ export default function ReportsScreen() {
           <View style={[styles.metricCard, styles.profitCard]}>
             <Text style={styles.metricLabel}>Total Profit</Text>
             <Text style={[styles.metricValue, styles.profitValue]}>
-              ${overviewMetrics.totalProfit.toFixed(2)}
+              {formatPesos(overviewMetrics.totalProfit)}
             </Text>
             <Text style={styles.metricSubtext}>
               {overviewMetrics.profitMargin.toFixed(1)}% margin
@@ -307,43 +510,104 @@ export default function ReportsScreen() {
           <View style={[styles.metricCard, styles.collectedCard]}>
             <Text style={styles.metricLabel}>Collected</Text>
             <Text style={[styles.metricValue, styles.collectedValue]}>
-              ${overviewMetrics.totalPaid.toFixed(2)}
+              {formatPesos(overviewMetrics.totalPaid)}
             </Text>
             <Text style={styles.metricSubtext}>
-              {overviewMetrics.totalRevenue > 0
-                ? ((overviewMetrics.totalPaid / overviewMetrics.totalRevenue) * 100).toFixed(1)
-                : 0}% of revenue
+              {overviewMetrics.collectionRate.toFixed(1)}% of revenue
             </Text>
           </View>
 
           <View style={[styles.metricCard, styles.owedCard]}>
             <Text style={styles.metricLabel}>Amount Owed</Text>
             <Text style={[styles.metricValue, styles.owedValue]}>
-              ${overviewMetrics.totalOwed.toFixed(2)}
+              {formatPesos(overviewMetrics.totalOwed)}
             </Text>
             <Text style={styles.metricSubtext}>Outstanding</Text>
           </View>
         </View>
       </View>
 
-      {/* Cost Breakdown */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Cost Breakdown</Text>
-        <View style={styles.card}>
-          <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>Total Cost of Goods:</Text>
-            <Text style={styles.breakdownValue}>${overviewMetrics.totalCost.toFixed(2)}</Text>
+      {/* Charts Section */}
+      {filteredSales.length > 0 && (
+        <>
+          {/* Payment Status Chart */}
+          {paymentStatusData.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Payment Status</Text>
+              <View style={styles.card}>
+                <PieChart
+                  data={paymentStatusData.map(item => ({
+                    name: `${item.name} (${item.count})`,
+                    population: item.count,
+                    color: item.color,
+                    legendFontColor: item.legendFontColor,
+                    legendFontSize: item.legendFontSize,
+                  }))}
+                  width={Dimensions.get('window').width - 48}
+                  height={200}
+                  chartConfig={{
+                    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  }}
+                  accessor="population"
+                  backgroundColor="transparent"
+                  paddingLeft="15"
+                  absolute
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Top Products List */}
+          {topProductsData.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Top Selling Products</Text>
+              <View style={styles.card}>
+                <View style={styles.productsList}>
+                  {topProductsData.map((product, index) => (
+                    <View key={index} style={styles.productItem}>
+                      <View style={styles.productRank}>
+                        <Text style={styles.productRankText}>{index + 1}</Text>
+                      </View>
+                      <View style={styles.productInfo}>
+                        <Text style={styles.productName}>{product.brand} - {product.name}</Text>
+                        <Text style={styles.productSize}>{product.size} • {product.quantity} units sold</Text>
+                      </View>
+                      <Text style={styles.productRevenue}>{formatPesos(product.revenue)}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Quick Stats */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Quick Stats</Text>
+            <View style={styles.card}>
+              <View style={styles.quickStatRow}>
+                <Text style={styles.quickStatLabel}>Average Sale Value:</Text>
+                <Text style={styles.quickStatValue}>
+                  {overviewMetrics.salesCount > 0
+                    ? formatPesos(overviewMetrics.totalRevenue / overviewMetrics.salesCount)
+                    : '$0'}
+                </Text>
+              </View>
+              <View style={styles.quickStatRow}>
+                <Text style={styles.quickStatLabel}>Collection Rate:</Text>
+                <Text style={styles.quickStatValue}>{overviewMetrics.collectionRate.toFixed(1)}%</Text>
+              </View>
+              <View style={styles.quickStatRow}>
+                <Text style={styles.quickStatLabel}>Average Profit per Sale:</Text>
+                <Text style={styles.quickStatValue}>
+                  {overviewMetrics.salesCount > 0
+                    ? formatPesos(overviewMetrics.totalProfit / overviewMetrics.salesCount)
+                    : '$0'}
+                </Text>
+              </View>
+            </View>
           </View>
-          <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>Total Revenue:</Text>
-            <Text style={styles.breakdownValue}>${overviewMetrics.totalRevenue.toFixed(2)}</Text>
-          </View>
-          <View style={[styles.breakdownRow, styles.breakdownRowTotal]}>
-            <Text style={styles.breakdownLabelTotal}>Net Profit:</Text>
-            <Text style={styles.breakdownValueProfit}>${overviewMetrics.totalProfit.toFixed(2)}</Text>
-          </View>
-        </View>
-      </View>
+        </>
+      )}
 
       <View style={styles.bottomSpacer} />
     </ScrollView>
@@ -353,7 +617,7 @@ export default function ReportsScreen() {
     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
       <Text style={styles.sectionTitle}>Shipment Performance</Text>
       <Text style={styles.sectionSubtitle}>
-        Track sales, profits, and outstanding payments for each shipment
+        All amounts shown in Dominican Pesos (DOP)
       </Text>
 
       {shipmentMetrics.length === 0 ? (
@@ -362,67 +626,80 @@ export default function ReportsScreen() {
           <Text style={styles.emptySubtext}>Create your first shipment to see reports here</Text>
         </View>
       ) : (
-        shipmentMetrics.map(shipment => (
-        <View key={shipment.id} style={styles.shipmentCard}>
-          <View style={styles.shipmentHeader}>
-            <View>
-              <Text style={styles.shipmentName}>{shipment.name}</Text>
-              <Text style={styles.shipmentDate}>
-                Created {format(new Date(shipment.createdDate), 'MMM dd, yyyy')}
-              </Text>
-            </View>
-          </View>
+        <>
+          {shipmentMetrics.map(shipment => (
+            <View key={shipment.id} style={styles.shipmentCard}>
+              <View style={styles.shipmentHeader}>
+                <View>
+                  <Text style={styles.shipmentName}>{shipment.name}</Text>
+                  <Text style={styles.shipmentDate}>
+                    Created {format(new Date(shipment.createdDate), 'MMM dd, yyyy')}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.exportIcon}
+                  onPress={() => generateIndividualPDF(shipment.id)}
+                >
+                  <Text style={styles.exportIconText}>📄</Text>
+                </TouchableOpacity>
+              </View>
 
-          <View style={styles.shipmentMetrics}>
-            <View style={styles.shipmentMetricRow}>
-              <Text style={styles.shipmentMetricLabel}>Initial Investment:</Text>
-              <Text style={styles.shipmentMetricValue}>${shipment.totalCost.toFixed(2)}</Text>
+              <View style={styles.shipmentMetrics}>
+                <View style={styles.shipmentMetricRow}>
+                  <Text style={styles.shipmentMetricLabel}>Initial Investment:</Text>
+                  <Text style={styles.shipmentMetricValue}>{formatPesos(shipment.totalCost)}</Text>
+                </View>
+                <View style={styles.shipmentMetricRow}>
+                  <Text style={styles.shipmentMetricLabel}>Sales Made:</Text>
+                  <Text style={styles.shipmentMetricValue}>{shipment.soldUnits} / {shipment.remainingUnits}</Text>
+                </View>
+                <View style={styles.shipmentMetricRow}>
+                  <Text style={styles.shipmentMetricLabel}>Revenue Generated:</Text>
+                  <Text style={[styles.shipmentMetricValue, styles.revenueValue]}>
+                    {formatPesos(shipment.totalRevenue)}
+                  </Text>
+                </View>
+                <View style={styles.shipmentMetricRow}>
+                  <Text style={styles.shipmentMetricLabel}>Profit Earned:</Text>
+                  <Text style={[styles.shipmentMetricValue, styles.profitValue]}>
+                    {formatPesos(shipment.totalProfit)}
+                  </Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.shipmentMetricRow}>
+                  <Text style={styles.shipmentMetricLabel}>Amount Collected:</Text>
+                  <Text style={[styles.shipmentMetricValue, styles.collectedValue]}>
+                    {formatPesos(shipment.totalPaid)}
+                  </Text>
+                </View>
+                <View style={styles.shipmentMetricRow}>
+                  <Text style={styles.shipmentMetricLabel}>Amount Owed:</Text>
+                  <Text style={[styles.shipmentMetricValue, styles.owedValue]}>
+                    {formatPesos(shipment.totalOwed)}
+                  </Text>
+                </View>
+                <View style={styles.divider} />
+                <View style={styles.shipmentMetricRow}>
+                  <Text style={styles.shipmentMetricLabel}>Investment Recovery:</Text>
+                  <Text style={styles.shipmentMetricValue}>
+                    {shipment.investmentRecovery.toFixed(1)}%
+                  </Text>
+                </View>
+                <View style={styles.shipmentMetricRow}>
+                  <Text style={styles.shipmentMetricLabel}>Profit Margin:</Text>
+                  <Text style={styles.shipmentMetricValue}>
+                    {shipment.profitMargin.toFixed(1)}%
+                  </Text>
+                </View>
+              </View>
             </View>
-            <View style={styles.shipmentMetricRow}>
-              <Text style={styles.shipmentMetricLabel}>Sales Made:</Text>
-              <Text style={styles.shipmentMetricValue}>{shipment.salesCount}</Text>
-            </View>
-            <View style={styles.shipmentMetricRow}>
-              <Text style={styles.shipmentMetricLabel}>Revenue Generated:</Text>
-              <Text style={[styles.shipmentMetricValue, styles.revenueValue]}>
-                ${shipment.totalRevenue.toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.shipmentMetricRow}>
-              <Text style={styles.shipmentMetricLabel}>Profit Earned:</Text>
-              <Text style={[styles.shipmentMetricValue, styles.profitValue]}>
-                ${shipment.totalProfit.toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.shipmentMetricRow}>
-              <Text style={styles.shipmentMetricLabel}>Amount Collected:</Text>
-              <Text style={[styles.shipmentMetricValue, styles.collectedValue]}>
-                ${shipment.totalPaid.toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.shipmentMetricRow}>
-              <Text style={styles.shipmentMetricLabel}>Amount Owed:</Text>
-              <Text style={[styles.shipmentMetricValue, styles.owedValue]}>
-                ${shipment.totalOwed.toFixed(2)}
-              </Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.shipmentMetricRow}>
-              <Text style={styles.shipmentMetricLabel}>Investment Recovery:</Text>
-              <Text style={styles.shipmentMetricValue}>
-                {shipment.investmentRecovery.toFixed(1)}%
-              </Text>
-            </View>
-            <View style={styles.shipmentMetricRow}>
-              <Text style={styles.shipmentMetricLabel}>Profit Margin:</Text>
-              <Text style={styles.shipmentMetricValue}>
-                {shipment.profitMargin.toFixed(1)}%
-              </Text>
-            </View>
-          </View>
-        </View>
-        ))
+          ))}
+
+          {/* Export All Button at bottom */}
+          <TouchableOpacity style={styles.exportAllButton} onPress={generatePDF}>
+            <Text style={styles.exportAllButtonText}>📄 Export All Shipments Report</Text>
+          </TouchableOpacity>
+        </>
       )}
 
       <View style={styles.bottomSpacer} />
@@ -430,7 +707,7 @@ export default function ReportsScreen() {
   );
 
   // Show loading state
-  const isLoading = shipmentsLoading || salesLoading;
+  const isLoading = shipmentsLoading || salesLoading || allocationsLoading;
 
   if (isLoading) {
     return (
@@ -465,13 +742,6 @@ export default function ReportsScreen() {
 
       {/* Content */}
       {activeTab === 'overview' ? renderOverview() : renderShipments()}
-
-      {/* Export Button */}
-      <View style={styles.exportContainer}>
-        <TouchableOpacity style={styles.exportButton} onPress={generatePDF}>
-          <Text style={styles.exportButtonText}>📄 Export to PDF</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -730,24 +1000,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E5EA',
     marginVertical: 8,
   },
-  exportContainer: {
-    padding: 12,
-    backgroundColor: '#f5f5f5',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
-  },
-  exportButton: {
+  exportIcon: {
+    padding: 8,
     backgroundColor: '#007AFF',
-    paddingVertical: 14,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  exportIconText: {
+    fontSize: 20,
+  },
+  exportAllButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 12,
     alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },
-  exportButtonText: {
+  exportAllButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
@@ -772,5 +1052,65 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#999',
     textAlign: 'center',
+  },
+  productsList: {
+    marginTop: 0,
+  },
+  productItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  productRank: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  productRankText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  productSize: {
+    fontSize: 12,
+    color: '#666',
+  },
+  productRevenue: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  quickStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  quickStatLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  quickStatValue: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
   },
 });
