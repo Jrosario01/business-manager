@@ -30,7 +30,7 @@ interface ExchangeRateState {
 
 export const useExchangeRateStore = create<ExchangeRateState>((set, get) => ({
   // Initial state
-  usdToDop: 60.0, // Default fallback rate for Dominican Peso
+  usdToDop: 62.25, // Default fallback rate for Dominican Peso
   lastUpdated: null,
   isManual: false,
   isLoading: false,

@@ -9,8 +9,8 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useShipmentsStore } from '../store/shipmentsStore';
-import DualCurrencyText from '../components/DualCurrencyText';
 
 type ViewMode = 'consolidated' | 'per-shipment';
 
@@ -33,6 +33,7 @@ interface ConsolidatedProduct {
 }
 
 export default function InventoryScreen() {
+  const { t } = useTranslation();
   const { shipments, loadShipments, isLoading } = useShipmentsStore();
   const [viewMode, setViewMode] = useState<ViewMode>('consolidated');
   const [searchQuery, setSearchQuery] = useState('');
@@ -139,7 +140,7 @@ export default function InventoryScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading inventory...</Text>
+        <Text style={styles.loadingText}>{t('inventory.loadingInventory')}</Text>
       </View>
     );
   }
@@ -148,14 +149,14 @@ export default function InventoryScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Inventory</Text>
+        <Text style={styles.headerTitle}>{t('inventory.title')}</Text>
       </View>
 
       {/* Search */}
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search products or shipments..."
+          placeholder={t('inventory.searchPlaceholder')}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
@@ -168,7 +169,7 @@ export default function InventoryScreen() {
           onPress={() => setViewMode('consolidated')}
         >
           <Text style={[styles.toggleText, viewMode === 'consolidated' && styles.toggleTextActive]}>
-            General View
+            {t('inventory.generalView')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -176,7 +177,7 @@ export default function InventoryScreen() {
           onPress={() => setViewMode('per-shipment')}
         >
           <Text style={[styles.toggleText, viewMode === 'per-shipment' && styles.toggleTextActive]}>
-            Per-Shipment
+            {t('inventory.perShipment')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -186,9 +187,9 @@ export default function InventoryScreen() {
         {/* Inventory Stats */}
         <View style={styles.statsSection}>
           <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Total Inventory</Text>
+            <Text style={styles.statLabel}>{t('inventory.totalInventory')}</Text>
             <Text style={styles.statValue}>{inventoryStats.totalUnits}</Text>
-            <Text style={styles.statSubtext}>units in stock</Text>
+            <Text style={styles.statSubtext}>{t('inventory.unitsInStock')}</Text>
           </View>
         </View>
 
@@ -197,7 +198,7 @@ export default function InventoryScreen() {
           <View>
             {filteredConsolidated.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No inventory found</Text>
+                <Text style={styles.emptyText}>{t('inventory.noInventoryFound')}</Text>
               </View>
             ) : (
               filteredConsolidated.map((product, index) => (
@@ -223,9 +224,9 @@ export default function InventoryScreen() {
                       <Text style={styles.productName}>{product.brand} {product.name}</Text>
                       <Text style={styles.productSize}>{product.size}</Text>
                       <View style={styles.productMetrics}>
-                        <Text style={styles.totalQuantity}>{product.totalQuantity} units</Text>
+                        <Text style={styles.totalQuantity}>{product.totalQuantity} {t('inventory.units')}</Text>
                         <Text style={styles.salePriceText}>
-                          ${product.salePrice?.toFixed(0) || '0'} /unit
+                          ${product.salePrice?.toFixed(0) || '0'} {t('inventory.perUnit')}
                         </Text>
                       </View>
                     </View>
@@ -233,21 +234,11 @@ export default function InventoryScreen() {
 
                   {/* Shipment Breakdown */}
                   <View style={styles.breakdown}>
-                    <Text style={styles.breakdownTitle}>Breakdown:</Text>
+                    <Text style={styles.breakdownTitle}>{t('inventory.breakdown')}:</Text>
                     {product.shipments.map((shipment, idx) => (
                       <View key={idx} style={styles.breakdownRow}>
                         <Text style={styles.breakdownShipment}>• {shipment.shipmentNumber}</Text>
-                        <View style={styles.breakdownDetails}>
-                          <Text style={styles.breakdownText}>{shipment.quantity} units</Text>
-                          <DualCurrencyText
-                            usdAmount={shipment.value}
-                            primaryCurrency="USD"
-                            layout="horizontal"
-                            style={styles.breakdownValue}
-                            secondaryStyle={styles.breakdownSecondary}
-                            showLabels={false}
-                          />
-                        </View>
+                        <Text style={styles.breakdownText}>{shipment.quantity} {t('inventory.units')}</Text>
                       </View>
                     ))}
                   </View>
@@ -260,7 +251,7 @@ export default function InventoryScreen() {
           <View>
             {filteredShipments.length === 0 ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyText}>No shipments found</Text>
+                <Text style={styles.emptyText}>{t('inventory.noShipmentsFound')}</Text>
               </View>
             ) : (
               filteredShipments.map((shipment) => {
@@ -268,27 +259,18 @@ export default function InventoryScreen() {
                 if (itemsWithInventory.length === 0) return null;
 
                 const totalUnits = itemsWithInventory.reduce((sum, i) => sum + i.remaining_inventory, 0);
-                const totalValue = itemsWithInventory.reduce((sum, i) => sum + (i.remaining_inventory * i.unit_cost), 0);
 
                 return (
                   <View key={shipment.id} style={styles.shipmentCard}>
                     <View style={styles.shipmentHeader}>
-                      <View>
+                      <View style={styles.shipmentTitleRow}>
                         <Text style={styles.shipmentNumber}>{shipment.shipment_number}</Text>
                         <Text style={styles.shipmentDate}>
                           {new Date(shipment.delivered_date || shipment.created_at).toLocaleDateString()}
                         </Text>
                       </View>
                       <View style={styles.shipmentSummary}>
-                        <Text style={styles.shipmentUnits}>{totalUnits} units</Text>
-                        <DualCurrencyText
-                          usdAmount={totalValue}
-                          primaryCurrency="USD"
-                          layout="vertical"
-                          style={styles.shipmentValue}
-                          secondaryStyle={styles.shipmentValueSecondary}
-                          showLabels={false}
-                        />
+                        <Text style={styles.shipmentUnits}>{totalUnits} {t('inventory.units')}</Text>
                       </View>
                     </View>
 
@@ -296,6 +278,21 @@ export default function InventoryScreen() {
                     <View style={styles.shipmentProducts}>
                       {itemsWithInventory.map((item, idx) => (
                         <View key={item.id} style={[styles.shipmentProductRow, idx > 0 && styles.borderTop]}>
+                          {/* Product Image */}
+                          <View style={styles.shipmentProductImageContainer}>
+                            {item.product?.image_url ? (
+                              <Image
+                                source={{ uri: item.product.image_url }}
+                                style={styles.shipmentProductImage}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View style={styles.shipmentProductImagePlaceholder}>
+                                <Text style={styles.placeholderText}>📦</Text>
+                              </View>
+                            )}
+                          </View>
+
                           <View style={styles.shipmentProductInfo}>
                             <Text style={styles.shipmentProductName}>
                               {item.product?.brand} {item.product?.name}
@@ -303,10 +300,7 @@ export default function InventoryScreen() {
                             <Text style={styles.shipmentProductSize}>{item.product?.size}</Text>
                           </View>
                           <View style={styles.shipmentProductStats}>
-                            <Text style={styles.shipmentProductQty}>{item.remaining_inventory} units</Text>
-                            <Text style={styles.shipmentSalePrice}>
-                              ${item.product?.sale_price?.toFixed(0) || '0'} /unit
-                            </Text>
+                            <Text style={styles.shipmentProductQty}>{item.remaining_inventory} {t('inventory.units')}</Text>
                           </View>
                         </View>
                       ))}
@@ -529,11 +523,15 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  shipmentTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   shipmentNumber: {
     fontSize: 17,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 4,
   },
   shipmentDate: {
     fontSize: 13,
@@ -563,11 +561,28 @@ const styles = StyleSheet.create({
   shipmentProductRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 10,
   },
   borderTop: {
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+  },
+  shipmentProductImageContainer: {
+    marginRight: 12,
+  },
+  shipmentProductImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+  },
+  shipmentProductImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shipmentProductInfo: {
     flex: 1,

@@ -6,12 +6,14 @@ import {
   FlatList,
   TouchableOpacity,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import CreateSaleModal from '../components/CreateSaleModal';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import { useSalesStore, Sale } from '../store/salesStore';
 import { useShipmentsStore } from '../store/shipmentsStore';
 
 export default function SalesScreen() {
+  const { t } = useTranslation();
   const { sales, loadSales, addSale, updateSale } = useSalesStore();
   const { loadShipments } = useShipmentsStore();
   const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'partial'>('all');
@@ -102,9 +104,9 @@ export default function SalesScreen() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'paid': return 'PAID';
-      case 'pending': return 'PENDING';
-      case 'partial': return 'PARTIAL';
+      case 'paid': return t('sales.paid').toUpperCase();
+      case 'pending': return t('sales.pending').toUpperCase();
+      case 'partial': return t('sales.partial').toUpperCase();
       default: return status.toUpperCase();
     }
   };
@@ -143,23 +145,23 @@ export default function SalesScreen() {
 
         <View style={styles.saleFooter}>
           <View style={styles.footerRow}>
-            <Text style={styles.footerLabel}>Total:</Text>
+            <Text style={styles.footerLabel}>{t('common.total')}:</Text>
             <Text style={styles.footerValue}>${item.totalRevenue}</Text>
           </View>
           {balance > 0 ? (
             <>
               <View style={styles.footerRow}>
-                <Text style={styles.footerLabel}>Paid:</Text>
+                <Text style={styles.footerLabel}>{t('sales.paid')}:</Text>
                 <Text style={[styles.footerValue, styles.paidValueText]}>${item.amountPaid}</Text>
               </View>
               <View style={[styles.footerRow, styles.balanceRow]}>
-                <Text style={styles.balanceLabel}>Balance Due:</Text>
+                <Text style={styles.balanceLabel}>{t('sales.balance')}:</Text>
                 <Text style={styles.balanceValue}>${balance}</Text>
               </View>
             </>
           ) : (
             <View style={styles.footerRow}>
-              <Text style={styles.footerLabel}>Profit:</Text>
+              <Text style={styles.footerLabel}>{t('sales.profit')}:</Text>
               <Text style={[styles.footerValue, styles.profitValue]}>+${item.profit}</Text>
             </View>
           )}
@@ -169,9 +171,9 @@ export default function SalesScreen() {
   };
 
   const filterButtons = [
-    { label: 'Pending', value: 'partial' as const },
-    { label: 'Completed', value: 'paid' as const },
-    { label: 'All', value: 'all' as const },
+    { label: t('sales.partial'), value: 'partial' as const },
+    { label: t('sales.paid'), value: 'paid' as const },
+    { label: t('reports.all'), value: 'all' as const },
   ];
 
   return (
@@ -203,7 +205,7 @@ export default function SalesScreen() {
           style={styles.newSaleButton}
           onPress={handleCreateSale}
         >
-          <Text style={styles.newSaleButtonText}>+ New Sale</Text>
+          <Text style={styles.newSaleButtonText}>+ {t('sales.newSale')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -215,9 +217,9 @@ export default function SalesScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No sales found</Text>
+            <Text style={styles.emptyText}>{t('sales.noSales')}</Text>
             <Text style={styles.emptySubtext}>
-              Sales will appear here when customers make purchases
+              {t('sales.noSalesSubtext')}
             </Text>
           </View>
         }

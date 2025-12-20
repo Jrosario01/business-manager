@@ -10,6 +10,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
 import AddProductModal from './AddProductModal';
 
@@ -29,6 +30,7 @@ interface CreateShipmentModalProps {
 }
 
 export default function CreateShipmentModal({ visible, onClose, onSubmit }: CreateShipmentModalProps) {
+  const { t } = useTranslation();
   const { products: catalogProducts, searchProducts, addProducts, loadProducts } = useProductsStore();
 
   const [products, setProducts] = useState<ShipmentProduct[]>([
@@ -82,7 +84,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
 
   const removeProduct = (index: number) => {
     if (products.length === 1) {
-      Alert.alert('Error', 'You must have at least one product');
+      Alert.alert(t('common.error'), t('modals.createShipment.atLeastOne'));
       return;
     }
     const newProducts = products.filter((_, i) => i !== index);
@@ -200,18 +202,18 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
     // Check if all products are selected from catalog
     const hasInvalidProducts = products.some(p => !p.catalogProductId);
     if (hasInvalidProducts) {
-      Alert.alert('Error', 'Please select products from the catalog. Use the search to find products or add new ones.');
+      Alert.alert(t('common.error'), t('modals.createShipment.selectAllProducts'));
       return;
     }
 
     const hasEmptyFields = products.some(p => !p.quantity || parseInt(p.quantity) <= 0);
     if (hasEmptyFields) {
-      Alert.alert('Error', 'Please enter quantity for all products');
+      Alert.alert(t('common.error'), t('modals.createShipment.enterQuantity'));
       return;
     }
 
     if (!totalShippingCost) {
-      Alert.alert('Error', 'Please enter total shipping cost (enter 0 if none)');
+      Alert.alert(t('common.error'), t('modals.createShipment.enterShippingCost'));
       return;
     }
 
@@ -257,12 +259,12 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
   const handleCancel = () => {
     if (hasUnsavedChanges()) {
       Alert.alert(
-        'Discard Changes?',
-        'You have unsaved changes. Are you sure you want to discard them?',
+        t('modals.createShipment.discardChanges'),
+        t('modals.createShipment.unsavedChanges'),
         [
-          { text: 'Keep Editing', style: 'cancel' },
+          { text: t('modals.createShipment.keepEditing'), style: 'cancel' },
           {
-            text: 'Discard',
+            text: t('modals.createShipment.discard'),
             style: 'destructive',
             onPress: () => {
               resetForm();
@@ -291,19 +293,19 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
         <View style={styles.container}>
           <View style={styles.header}>
             <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.cancelButton}>Cancel</Text>
+              <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
             </TouchableOpacity>
-            <Text style={styles.title}>New Shipment</Text>
+            <Text style={styles.title}>{t('modals.createShipment.newShipment')}</Text>
             <TouchableOpacity onPress={handleSubmit}>
-              <Text style={styles.saveButton}>Save</Text>
+              <Text style={styles.saveButton}>{t('common.save')}</Text>
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Total Shipping Section */}
-            <Text style={styles.sectionTitle}>Total Shipping Cost</Text>
+            <Text style={styles.sectionTitle}>{t('modals.createShipment.totalShippingCost')}</Text>
             <View style={styles.card}>
-              <Text style={styles.label}>Total Shipping ($) *</Text>
+              <Text style={styles.label}>{t('modals.createShipment.totalShipping')}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="0.00"
@@ -315,17 +317,17 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
               {totalShippingCost && totalUnits > 0 && (
                 <View style={styles.shippingInfo}>
                   <Text style={styles.shippingInfoText}>
-                    📦 Total Units: {totalUnits}
+                    {t('modals.createShipment.totalUnits')} {totalUnits}
                   </Text>
                   <Text style={styles.shippingInfoText}>
-                    💰 Shipping per Unit: ${shippingPerUnit.toFixed(2)}
+                    {t('modals.createShipment.shippingPerUnit')} ${shippingPerUnit.toFixed(2)}
                   </Text>
                 </View>
               )}
             </View>
 
             {/* Products Section */}
-            <Text style={styles.sectionTitle}>Products</Text>
+            <Text style={styles.sectionTitle}>{t('modals.createShipment.products')}</Text>
 
             {products.map((product, index) => {
               const productCost = (parseFloat(product.unitCost) || 0) * (parseInt(product.quantity) || 0);
@@ -336,10 +338,10 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
               return (
                 <View key={index} style={styles.productCard}>
                   <View style={styles.productHeader}>
-                    <Text style={styles.productNumber}>Product {index + 1}</Text>
+                    <Text style={styles.productNumber}>{t('modals.createShipment.product')} {index + 1}</Text>
                     {products.length > 1 && (
                       <TouchableOpacity onPress={() => removeProduct(index)}>
-                        <Text style={styles.removeButton}>✕ Remove</Text>
+                        <Text style={styles.removeButton}>{t('modals.createShipment.remove')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -347,10 +349,10 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                   {/* Product Selection - Show search OR selected product */}
                   {!product.catalogProductId ? (
                     <>
-                      <Text style={styles.label}>Search Product *</Text>
+                      <Text style={styles.label}>{t('modals.createShipment.searchProduct')}</Text>
                       <TextInput
                         style={styles.input}
-                        placeholder="Type brand or product name..."
+                        placeholder={t('modals.createShipment.typeBrandOrProduct')}
                         value={searchQuery[index] || ''}
                         onChangeText={(text) => handleSearchChange(index, text)}
                         onFocus={() => {
@@ -407,20 +409,20 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                             style={styles.addNewProductButton}
                             onPress={() => handleAddNewProduct(index)}
                           >
-                            <Text style={styles.addNewProductText}>➕ Add New Product to Catalog</Text>
+                            <Text style={styles.addNewProductText}>{t('modals.createShipment.addNewProductToCatalog')}</Text>
                           </TouchableOpacity>
                         </View>
                       )}
 
                       <View style={styles.noProductInfo}>
                         <Text style={styles.noProductText}>
-                          ⚠️ Search and select a product from catalog above
+                          {t('modals.createShipment.searchSelectProduct')}
                         </Text>
                       </View>
                     </>
                   ) : (
                     <>
-                      <Text style={styles.label}>Selected Product</Text>
+                      <Text style={styles.label}>{t('modals.createShipment.selectedProduct')}</Text>
                       <View style={styles.selectedProductCard}>
                         {/* Product Image */}
                         <View style={styles.selectedProductImageContainer}>
@@ -448,7 +450,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                           style={styles.editProductButton}
                           onPress={() => clearProductSelection(index)}
                         >
-                          <Text style={styles.editProductButtonText}>Edit</Text>
+                          <Text style={styles.editProductButtonText}>{t('common.edit')}</Text>
                         </TouchableOpacity>
                       </View>
                     </>
@@ -459,7 +461,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                     <>
                   <View style={styles.threeColumnRow}>
                     <View style={styles.thirdWidth}>
-                      <Text style={styles.label}>Unit Cost ($)</Text>
+                      <Text style={styles.label}>{t('modals.createShipment.unitCost')}</Text>
                       <View style={styles.readOnlyInput}>
                         <Text style={styles.readOnlyText}>
                           ${product.unitCost || '0.00'}
@@ -467,7 +469,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                       </View>
                     </View>
                     <View style={styles.thirdWidth}>
-                      <Text style={styles.label}>Shipping/Unit</Text>
+                      <Text style={styles.label}>{t('modals.createShipment.shippingUnit')}</Text>
                       <View style={styles.readOnlyInput}>
                         <Text style={styles.readOnlyText}>
                           ${shippingPerUnit.toFixed(2)}
@@ -475,7 +477,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                       </View>
                     </View>
                     <View style={styles.thirdWidth}>
-                      <Text style={styles.label}>Quantity *</Text>
+                      <Text style={styles.label}>{t('modals.createShipment.quantity')}</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="0"
@@ -490,17 +492,17 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                   {product.unitCost && product.quantity && (
                     <View style={styles.productTotalSection}>
                       <View style={styles.costRow}>
-                        <Text style={styles.costLabel}>Product Cost:</Text>
+                        <Text style={styles.costLabel}>{t('modals.createShipment.productCost')}</Text>
                         <Text style={styles.costValue}>${productCost.toFixed(2)}</Text>
                       </View>
                       <View style={styles.costRow}>
                         <Text style={styles.costLabel}>
-                          Shipping ({product.quantity} × ${shippingPerUnit.toFixed(2)}):
+                          {t('modals.createShipment.shipping', { qty: product.quantity, rate: shippingPerUnit.toFixed(2) })}
                         </Text>
                         <Text style={styles.costValue}>${productShipping.toFixed(2)}</Text>
                       </View>
                       <View style={[styles.costRow, styles.productTotalRow]}>
-                        <Text style={styles.productTotalLabel}>Product Total:</Text>
+                        <Text style={styles.productTotalLabel}>{t('modals.createShipment.productTotal')}</Text>
                         <Text style={styles.productTotalValue}>${productTotal.toFixed(2)}</Text>
                       </View>
                     </View>
@@ -512,34 +514,34 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
             })}
 
             <TouchableOpacity style={styles.addProductButton} onPress={addProduct}>
-              <Text style={styles.addProductButtonText}>+ Add Another Product</Text>
+              <Text style={styles.addProductButtonText}>{t('modals.createShipment.addAnotherProduct')}</Text>
             </TouchableOpacity>
 
             {/* Grand Total */}
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>Shipment Summary</Text>
+              <Text style={styles.sectionTitle}>{t('modals.createShipment.shipmentSummary')}</Text>
               <View style={styles.costSummary}>
                 <View style={styles.costRow}>
-                  <Text style={styles.summaryLabel}>Products Cost:</Text>
+                  <Text style={styles.summaryLabel}>{t('modals.createShipment.productsCost')}</Text>
                   <Text style={styles.summaryValue}>${calculateProductsCost().toFixed(2)}</Text>
                 </View>
                 <View style={styles.costRow}>
-                  <Text style={styles.summaryLabel}>Total Shipping:</Text>
+                  <Text style={styles.summaryLabel}>{t('modals.createShipment.totalShippingLabel')}</Text>
                   <Text style={styles.summaryValue}>${(parseFloat(totalShippingCost) || 0).toFixed(2)}</Text>
                 </View>
                 <View style={[styles.costRow, styles.grandTotalRow]}>
-                  <Text style={styles.grandTotalLabel}>Grand Total:</Text>
+                  <Text style={styles.grandTotalLabel}>{t('modals.createShipment.grandTotal')}</Text>
                   <Text style={styles.grandTotalValue}>${calculateTotalCost().toFixed(2)}</Text>
                 </View>
               </View>
             </View>
 
             {/* Notes */}
-            <Text style={styles.sectionTitle}>Notes (Optional)</Text>
+            <Text style={styles.sectionTitle}>{t('modals.createShipment.notesOptional')}</Text>
             <View style={styles.card}>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Add notes (supplier, tracking, etc.)"
+                placeholder={t('modals.createShipment.addNotesPlaceholder')}
                 value={notes}
                 onChangeText={setNotes}
                 multiline

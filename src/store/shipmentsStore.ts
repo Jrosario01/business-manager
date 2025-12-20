@@ -15,6 +15,7 @@ export interface SupabaseShipment {
   net_profit: number;
   your_share: number;
   partner_share: number;
+  exchange_rate_used: number; // USD to DOP rate at time of shipment creation
   notes?: string;
   created_by?: string;
   created_at: string;

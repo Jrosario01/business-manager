@@ -10,6 +10,7 @@ import {
   Alert,
   SafeAreaView,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 interface UpdatePaymentModalProps {
   visible: boolean;
@@ -32,6 +33,7 @@ interface UpdatePaymentModalProps {
 }
 
 export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }: UpdatePaymentModalProps) {
+  const { t } = useTranslation();
   const [productPayments, setProductPayments] = useState<{ [index: number]: string }>({});
 
   // Reset payment fields when modal opens/closes
@@ -63,12 +65,12 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
 
   const handleMarkAllPaid = () => {
     Alert.alert(
-      'Pay All Outstanding Balances',
-      'This will mark all products as fully paid. Continue?',
+      t('modals.updatePayment.payAllBalances'),
+      t('modals.updatePayment.payAllConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Pay All',
+          text: t('modals.updatePayment.payAll'),
           onPress: () => {
             // Set all products to fully paid
             const fullPayments: { [index: number]: number } = {};
@@ -106,7 +108,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
         const newTotal = currentPaid + additionalPayment;
 
         if (newTotal > productTotal) {
-          Alert.alert('Error', `Payment for ${product.brand} ${product.name} exceeds total amount`);
+          Alert.alert(t('common.error'), t('modals.updatePayment.paymentExceedsTotal', { product: `${product.brand} ${product.name}` }));
           return;
         }
 
@@ -115,7 +117,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
     });
 
     if (Object.keys(updates).length === 0) {
-      Alert.alert('Error', 'No changes to save');
+      Alert.alert(t('common.error'), t('modals.updatePayment.noChanges'));
       return;
     }
 
@@ -152,11 +154,11 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
         <View style={styles.container}>
           <View style={styles.header}>
           <TouchableOpacity onPress={handleCancel}>
-            <Text style={styles.cancelButton}>Cancel</Text>
+            <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Update Payment</Text>
+          <Text style={styles.title}>{t('sales.updatePayment')}</Text>
           <TouchableOpacity onPress={handleSubmit}>
-            <Text style={styles.saveButton}>Save</Text>
+            <Text style={styles.saveButton}>{t('common.save')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -164,11 +166,11 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
           {/* Customer Info */}
           <View style={styles.customerCard}>
             <View>
-              <Text style={styles.customerLabel}>Customer</Text>
+              <Text style={styles.customerLabel}>{t('sales.customer')}</Text>
               <Text style={styles.customerName}>{sale.customerName}</Text>
             </View>
             <View style={styles.balanceBadge}>
-              <Text style={styles.balanceLabel}>Outstanding</Text>
+              <Text style={styles.balanceLabel}>{t('modals.updatePayment.outstanding')}</Text>
               <Text style={styles.balanceAmount}>${totalBalance.toFixed(2)}</Text>
             </View>
           </View>
@@ -201,7 +203,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
                 {/* Outstanding Balances Section */}
                 {unpaidProducts.length > 0 && (
                   <>
-                    <Text style={styles.sectionTitle}>Outstanding Balances</Text>
+                    <Text style={styles.sectionTitle}>{t('modals.updatePayment.outstandingBalances')}</Text>
                     {unpaidProducts.map(({ product, index, productTotal, productPaid, productBalance }) => {
                       const enteredAmount = parseFloat(productPayments[index]) || 0;
                       const paymentChange = enteredAmount;
@@ -218,18 +220,18 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
 
                           <View style={styles.statusRow}>
                             <View style={styles.statusItem}>
-                              <Text style={styles.statusLabel}>Paid</Text>
+                              <Text style={styles.statusLabel}>{t('modals.updatePayment.paid')}</Text>
                               <Text style={styles.statusValue}>${productPaid.toFixed(2)}</Text>
                             </View>
                             <View style={styles.statusItem}>
-                              <Text style={styles.statusLabelDue}>Due</Text>
+                              <Text style={styles.statusLabelDue}>{t('modals.updatePayment.due')}</Text>
                               <Text style={styles.statusValueDue}>${productBalance.toFixed(2)}</Text>
                             </View>
                           </View>
 
                           <View style={styles.divider} />
 
-                          <Text style={styles.inputLabel}>Amount to Pay</Text>
+                          <Text style={styles.inputLabel}>{t('modals.updatePayment.amountToPay')}</Text>
                           <View style={styles.paymentRow}>
                             <View style={styles.inputRow}>
                               <Text style={styles.dollarSign}>$</Text>
@@ -255,7 +257,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
                               style={styles.payFullButton}
                               onPress={() => quickFillAmount(index, productBalance)}
                             >
-                              <Text style={styles.payFullButtonText}>Pay Full</Text>
+                              <Text style={styles.payFullButtonText}>{t('modals.updatePayment.payFull')}</Text>
                             </TouchableOpacity>
                           </View>
 
@@ -263,13 +265,13 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
                           {enteredAmount > 0 && (
                             <View style={styles.previewBox}>
                               <View style={styles.previewRow}>
-                                <Text style={styles.previewLabel}>Paying:</Text>
+                                <Text style={styles.previewLabel}>{t('modals.updatePayment.paying')}</Text>
                                 <Text style={styles.previewValue}>
                                   +${paymentChange.toFixed(2)}
                                 </Text>
                               </View>
                               <View style={[styles.previewRow, styles.newBalanceRow]}>
-                                <Text style={styles.newBalanceLabel}>Remaining Balance:</Text>
+                                <Text style={styles.newBalanceLabel}>{t('modals.updatePayment.remainingBalance')}</Text>
                                 <Text style={[styles.newBalanceValue, newBalance === 0 && styles.newBalancePaid]}>
                                   ${newBalance.toFixed(2)} {newBalance === 0 && '✓'}
                                 </Text>
@@ -285,7 +287,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
                 {/* Paid Products Section */}
                 {paidProducts.length > 0 && (
                   <>
-                    <Text style={[styles.sectionTitle, styles.paidSectionTitle]}>Paid in Full</Text>
+                    <Text style={[styles.sectionTitle, styles.paidSectionTitle]}>{t('modals.updatePayment.paidInFull')}</Text>
                     {paidProducts.map(({ product, index, productTotal, productPaid }) => (
                       <View key={index} style={[styles.productCard, styles.paidProductCard]}>
                         <View style={styles.productHeader}>
@@ -298,7 +300,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
                         </View>
 
                         <View style={styles.paidBadge}>
-                          <Text style={styles.paidBadgeText}>✓ Paid ${productPaid.toFixed(2)}</Text>
+                          <Text style={styles.paidBadgeText}>✓ {t('modals.updatePayment.paidAmount', { amount: productPaid.toFixed(2) })}</Text>
                         </View>
                       </View>
                     ))}
@@ -323,7 +325,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
             return productTotal === productPaid;
           }) && (
             <View style={styles.nothingDueCard}>
-              <Text style={styles.nothingDueText}>✓ All products paid in full</Text>
+              <Text style={styles.nothingDueText}>{t('modals.updatePayment.allPaidInFull')}</Text>
             </View>
           )}
 
@@ -335,11 +337,11 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
           {totalPaymentChange > 0 && (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>
-                Total Payment: ${totalPaymentChange.toFixed(2)}
+                {t('modals.updatePayment.totalPayment')}: ${totalPaymentChange.toFixed(2)}
               </Text>
               <Text style={styles.summaryDivider}>•</Text>
               <Text style={[styles.summaryLabel, remainingAfterPayment === 0 && styles.summaryLabelPaid]}>
-                Remaining: ${remainingAfterPayment.toFixed(2)}
+                {t('modals.updatePayment.remaining')}: ${remainingAfterPayment.toFixed(2)}
               </Text>
             </View>
           )}
@@ -350,7 +352,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
                 style={styles.payAllButton}
                 onPress={handleMarkAllPaid}
               >
-                <Text style={styles.payAllButtonText}>Pay All</Text>
+                <Text style={styles.payAllButtonText}>{t('modals.updatePayment.payAll')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -359,7 +361,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
               disabled={totalPaymentChange === 0}
             >
               <Text style={styles.submitButtonText}>
-                {totalPaymentChange > 0 ? 'Save Payment' : 'Enter Amount'}
+                {totalPaymentChange > 0 ? t('modals.updatePayment.savePayment') : t('modals.updatePayment.enterAmount')}
               </Text>
             </TouchableOpacity>
           </View>

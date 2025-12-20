@@ -10,7 +10,8 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
+import { useTranslation } from 'react-i18next';
+import { useProductsStore, SupabaseProduct as CatalogProduct } from '../store/productsStore';
 import { useCustomersStore } from '../store/customersStore';
 import { useExchangeRateStore } from '../store/exchangeRateStore';
 
@@ -38,6 +39,7 @@ export default function CreateSaleModal({
   onClose,
   onSubmit,
 }: CreateSaleModalProps) {
+  const { t } = useTranslation();
   const { products: catalogProducts, searchProducts, loadProducts } = useProductsStore();
   const { customers, searchCustomers, loadCustomers, addCustomer } = useCustomersStore();
   const { usdToDop } = useExchangeRateStore();
@@ -227,7 +229,7 @@ export default function CreateSaleModal({
 
   const removeProduct = (index: number) => {
     if (products.length === 1) {
-      Alert.alert('Error', 'At least one product is required');
+      Alert.alert(t('common.error'), t('modals.createSale.atLeastOneProduct'));
       return;
     }
     setProducts(products.filter((_, i) => i !== index));
@@ -268,17 +270,17 @@ export default function CreateSaleModal({
   const handleSubmit = async () => {
     // Validate customer
     if (!selectedCustomer && !isAddingNewCustomer) {
-      Alert.alert('Error', 'Please select or add a customer');
+      Alert.alert(t('common.error'), t('modals.createSale.selectOrAddCustomer'));
       return;
     }
 
     if (isAddingNewCustomer) {
       if (!newCustomerName.trim()) {
-        Alert.alert('Error', 'Please enter customer name');
+        Alert.alert(t('common.error'), t('modals.createSale.enterCustomerName'));
         return;
       }
       if (!newCustomerPhone.trim()) {
-        Alert.alert('Error', 'Please enter customer phone');
+        Alert.alert(t('common.error'), t('modals.createSale.enterCustomerPhone'));
         return;
       }
     }
@@ -286,13 +288,13 @@ export default function CreateSaleModal({
     // Validate products
     const hasInvalidProducts = products.some(p => !p.catalogProductId);
     if (hasInvalidProducts) {
-      Alert.alert('Error', 'Please select all products from catalog');
+      Alert.alert(t('common.error'), t('modals.createSale.selectAllProducts'));
       return;
     }
 
     const hasEmptyFields = products.some(p => !p.quantity || !p.salePrice || !p.amountPaid);
     if (hasEmptyFields) {
-      Alert.alert('Error', 'Please fill in quantity, sale price, and amount paid for all products');
+      Alert.alert(t('common.error'), t('modals.createSale.fillAllFields'));
       return;
     }
 
@@ -376,12 +378,12 @@ export default function CreateSaleModal({
   const handleCancel = () => {
     if (hasUnsavedChanges()) {
       Alert.alert(
-        'Discard Changes?',
-        'You have unsaved changes. Are you sure you want to discard them?',
+        t('modals.createSale.discardChanges'),
+        t('modals.createSale.unsavedChangesWarning'),
         [
-          { text: 'Keep Editing', style: 'cancel' },
+          { text: t('modals.createSale.keepEditing'), style: 'cancel' },
           {
-            text: 'Discard',
+            text: t('modals.createSale.discard'),
             style: 'destructive',
             onPress: () => {
               resetForm();
@@ -410,21 +412,21 @@ export default function CreateSaleModal({
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleCancel}>
-            <Text style={styles.cancelButton}>Cancel</Text>
+            <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>New Sale</Text>
+          <Text style={styles.title}>{t('sales.newSale')}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           {/* Customer Section */}
-          <Text style={styles.sectionTitle}>Customer</Text>
+          <Text style={styles.sectionTitle}>{t('sales.customer')}</Text>
           <View style={styles.card}>
             {selectedCustomer ? (
               // Show selected customer with Edit button
               <View style={styles.selectedCustomerCard}>
                 <View style={styles.selectedCustomerInfo}>
-                  <Text style={styles.selectedLabel}>Selected Customer:</Text>
+                  <Text style={styles.selectedLabel}>{t('modals.createSale.selectedCustomer')}</Text>
                   <Text style={styles.selectedName}>{selectedCustomer.name}</Text>
                   <Text style={styles.selectedPhone}>{selectedCustomer.phone}</Text>
                 </View>
@@ -436,14 +438,14 @@ export default function CreateSaleModal({
                     setShowCustomerSuggestions(false);
                   }}
                 >
-                  <Text style={styles.editCustomerButtonText}>Edit</Text>
+                  <Text style={styles.editCustomerButtonText}>{t('common.edit')}</Text>
                 </TouchableOpacity>
               </View>
             ) : isAddingNewCustomer ? (
               // Show new customer form
               <>
                 <View style={styles.newCustomerHeader}>
-                  <Text style={styles.newCustomerTitle}>New Customer Details</Text>
+                  <Text style={styles.newCustomerTitle}>{t('modals.createSale.newCustomerDetails')}</Text>
                   <TouchableOpacity
                     onPress={() => {
                       setIsAddingNewCustomer(false);
@@ -451,19 +453,19 @@ export default function CreateSaleModal({
                       setNewCustomerPhone('');
                     }}
                   >
-                    <Text style={styles.cancelNewCustomerText}>Cancel</Text>
+                    <Text style={styles.cancelNewCustomerText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.label}>Full Name *</Text>
+                <Text style={styles.label}>{t('modals.createSale.fullName')}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter customer name..."
+                  placeholder={t('modals.createSale.enterCustomerNamePlaceholder')}
                   value={newCustomerName}
                   onChangeText={setNewCustomerName}
                 />
 
-                <Text style={styles.label}>Phone Number *</Text>
+                <Text style={styles.label}>{t('modals.createSale.phoneNumber')}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="XXX-XXX-XXXX"
@@ -476,10 +478,10 @@ export default function CreateSaleModal({
             ) : (
               // Show search field
               <>
-                <Text style={styles.label}>Search Customer *</Text>
+                <Text style={styles.label}>{t('modals.createSale.searchCustomer')}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Search by name or phone..."
+                  placeholder={t('modals.createSale.searchByNameOrPhone')}
                   value={customerSearch}
                   onChangeText={(text) => {
                     setCustomerSearch(text);
@@ -508,12 +510,12 @@ export default function CreateSaleModal({
 
                 {showCustomerSuggestions && customerSuggestions.length === 0 && customerSearch.length > 0 && (
                   <View style={styles.noResults}>
-                    <Text style={styles.noResultsText}>Customer not found</Text>
+                    <Text style={styles.noResultsText}>{t('modals.createSale.customerNotFound')}</Text>
                     <TouchableOpacity
                       style={styles.addNewCustomerButton}
                       onPress={handleAddNewCustomer}
                     >
-                      <Text style={styles.addNewCustomerButtonText}>+ Add New Customer</Text>
+                      <Text style={styles.addNewCustomerButtonText}>{t('modals.createSale.addNewCustomer')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -522,7 +524,7 @@ export default function CreateSaleModal({
           </View>
 
           {/* Products Section */}
-          <Text style={styles.sectionTitle}>Products</Text>
+          <Text style={styles.sectionTitle}>{t('sales.products')}</Text>
           {products.map((product, index) => {
             const suggestions = getProductSuggestions(index);
 
@@ -530,11 +532,11 @@ export default function CreateSaleModal({
               <View key={index} style={styles.productCard}>
                 <View style={styles.productHeader}>
                   <TouchableOpacity onPress={() => handleTripleTap(index)} activeOpacity={0.7}>
-                    <Text style={styles.productNumber}>Product {index + 1}</Text>
+                    <Text style={styles.productNumber}>{t('modals.createSale.product')} {index + 1}</Text>
                   </TouchableOpacity>
                   {products.length > 1 && (
                     <TouchableOpacity onPress={() => removeProduct(index)}>
-                      <Text style={styles.removeButton}>✕ Remove</Text>
+                      <Text style={styles.removeButton}>✕ {t('modals.createSale.remove')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -551,10 +553,10 @@ export default function CreateSaleModal({
                 {/* Product Selection */}
                 {!product.catalogProductId ? (
                   <>
-                    <Text style={styles.label}>Search Product *</Text>
+                    <Text style={styles.label}>{t('modals.createSale.searchProduct')}</Text>
                     <TextInput
                       style={styles.input}
-                      placeholder="Type brand or product name..."
+                      placeholder={t('modals.createSale.typeBrandOrProduct')}
                       value={productSearches[index] || ''}
                       onChangeText={(text) => handleSearchChange(index, text)}
                       onFocus={() => {
@@ -586,9 +588,9 @@ export default function CreateSaleModal({
                               activeOpacity={0.7}
                             >
                               <View pointerEvents="none" style={styles.productSuggestionContent}>
-                                {catalogProduct.image ? (
+                                {catalogProduct.image_url ? (
                                   <Image
-                                    source={{ uri: catalogProduct.image }}
+                                    source={{ uri: catalogProduct.image_url }}
                                     style={styles.suggestionImage}
                                   />
                                 ) : (
@@ -601,7 +603,7 @@ export default function CreateSaleModal({
                                     {catalogProduct.brand} - {catalogProduct.name}
                                   </Text>
                                   <Text style={styles.suggestionPhone}>
-                                    {catalogProduct.size} • ${catalogProduct.cost}
+                                    {catalogProduct.size} • ${catalogProduct.sale_price || catalogProduct.cost}
                                   </Text>
                                 </View>
                               </View>
@@ -613,19 +615,19 @@ export default function CreateSaleModal({
 
                     <View style={styles.noProductInfo}>
                       <Text style={styles.noProductText}>
-                        ⚠️ Search and select a product from catalog above
+                        ⚠️ {t('modals.createSale.searchSelectProduct')}
                       </Text>
                     </View>
                   </>
                 ) : (
                   <>
-                    <Text style={styles.label}>Selected Product</Text>
+                    <Text style={styles.label}>{t('modals.createSale.selectedProduct')}</Text>
                     <View style={styles.selectedProductCard}>
                       {/* Product Image */}
                       <View style={styles.selectedProductImageContainer}>
-                        {product.catalogProductId && catalogProducts.find(p => p.id === product.catalogProductId)?.image ? (
+                        {product.catalogProductId && catalogProducts.find(p => p.id === product.catalogProductId)?.image_url ? (
                           <Image
-                            source={{ uri: catalogProducts.find(p => p.id === product.catalogProductId)!.image }}
+                            source={{ uri: catalogProducts.find(p => p.id === product.catalogProductId)!.image_url }}
                             style={styles.selectedProductImage}
                           />
                         ) : (
@@ -647,7 +649,7 @@ export default function CreateSaleModal({
                         style={styles.editProductButton}
                         onPress={() => clearProductSelection(index)}
                       >
-                        <Text style={styles.editProductButtonText}>Edit</Text>
+                        <Text style={styles.editProductButtonText}>{t('common.edit')}</Text>
                       </TouchableOpacity>
                     </View>
                   </>
@@ -658,7 +660,7 @@ export default function CreateSaleModal({
                   <>
                   <View style={styles.threeColumnRow}>
                     <View style={styles.thirdWidth}>
-                      <Text style={styles.label}>Qty *</Text>
+                      <Text style={styles.label}>{t('modals.createSale.qty')}</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="0"
@@ -668,7 +670,7 @@ export default function CreateSaleModal({
                       />
                     </View>
                     <View style={styles.thirdWidth}>
-                      <Text style={styles.label}>Price ($) *</Text>
+                      <Text style={styles.label}>{t('modals.createSale.priceDollar')}</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="0.00"
@@ -678,7 +680,7 @@ export default function CreateSaleModal({
                       />
                     </View>
                     <View style={styles.thirdWidth}>
-                      <Text style={styles.label}>Paid ($) *</Text>
+                      <Text style={styles.label}>{t('modals.createSale.paidDollar')}</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="0.00"
@@ -695,13 +697,13 @@ export default function CreateSaleModal({
                       onPress={() => toggleShowCost(index)}
                     >
                       <Text style={styles.showCostButtonText}>
-                        {product.showCost ? '▼ Hide Unit Cost' : '▶ Show Unit Cost'}
+                        {product.showCost ? `▼ ${t('modals.createSale.hideUnitCost')}` : `▶ ${t('modals.createSale.showUnitCost')}`}
                       </Text>
                     </TouchableOpacity>
 
                     {product.showCost && (
                       <View style={styles.unitCostContainer}>
-                        <Text style={styles.unitCostLabel}>Unit Cost:</Text>
+                        <Text style={styles.unitCostLabel}>{t('modals.createSale.unitCost')}</Text>
                         <Text style={styles.unitCostValue}>${product.unitCost.toFixed(2)}</Text>
                       </View>
                     )}
@@ -709,7 +711,7 @@ export default function CreateSaleModal({
                    {product.quantity && product.salePrice && (
                      <View style={styles.productTotalSection}>
                        <View style={styles.productTotalRow}>
-                         <Text style={styles.productTotalLabel}>Total:</Text>
+                         <Text style={styles.productTotalLabel}>{t('modals.createSale.total')}</Text>
                          <Text style={styles.productTotalValue}>
                            ${(parseFloat(product.salePrice) * parseInt(product.quantity || '0')).toFixed(2)}
                          </Text>
@@ -717,13 +719,13 @@ export default function CreateSaleModal({
                        {product.amountPaid && (
                          <>
                            <View style={styles.productTotalRow}>
-                             <Text style={styles.costLabel}>Paid:</Text>
+                             <Text style={styles.costLabel}>{t('modals.createSale.paid')}</Text>
                              <Text style={styles.costValue}>
                                ${parseFloat(product.amountPaid).toFixed(2)}
                              </Text>
                            </View>
                            <View style={[styles.productTotalRow, styles.balanceRow]}>
-                             <Text style={styles.balanceLabel}>Balance:</Text>
+                             <Text style={styles.balanceLabel}>{t('sales.balance')}</Text>
                              <Text style={styles.balanceValue}>
                                ${((parseFloat(product.salePrice) * parseInt(product.quantity || '0')) - parseFloat(product.amountPaid)).toFixed(2)}
                              </Text>
@@ -739,32 +741,32 @@ export default function CreateSaleModal({
           })}
 
           <TouchableOpacity style={styles.addProductButton} onPress={addProduct}>
-            <Text style={styles.addProductButtonText}>+ Add Another Product</Text>
+            <Text style={styles.addProductButtonText}>{t('modals.createSale.addAnotherProduct')}</Text>
           </TouchableOpacity>
 
           {/* Sale Summary */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Sale Summary</Text>
+            <Text style={styles.sectionTitle}>{t('modals.createSale.saleSummary')}</Text>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Amount:</Text>
+              <Text style={styles.summaryLabel}>{t('modals.createSale.totalAmount')}</Text>
               <Text style={styles.summaryValue}>${totalRevenue.toFixed(2)}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Amount Paid:</Text>
+              <Text style={styles.summaryLabel}>{t('sales.amountPaid')}</Text>
               <Text style={styles.summaryValue}>${paid.toFixed(2)}</Text>
             </View>
             <View style={[styles.summaryRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Balance Due:</Text>
+              <Text style={styles.totalLabel}>{t('modals.createSale.balanceDue')}</Text>
               <Text style={styles.totalValue}>${balance.toFixed(2)}</Text>
             </View>
           </View>
 
           {/* Notes */}
-          <Text style={styles.sectionTitle}>Notes (Optional)</Text>
+          <Text style={styles.sectionTitle}>{t('modals.createSale.notesOptional')}</Text>
           <View style={styles.card}>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Add any notes..."
+              placeholder={t('modals.createSale.addNotesPlaceholder')}
               value={notes}
               onChangeText={setNotes}
               multiline
@@ -782,7 +784,7 @@ export default function CreateSaleModal({
             onPress={handleSubmit}
             activeOpacity={0.8}
           >
-            <Text style={styles.completeSaleButtonText}>Complete Sale</Text>
+            <Text style={styles.completeSaleButtonText}>{t('modals.createSale.completeSale')}</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 
 interface ProductForm {
@@ -93,6 +94,7 @@ export default function AddProductModal({
   onSubmit,
   existingBrands,
 }: AddProductModalProps) {
+  const { t } = useTranslation();
   const [products, setProducts] = useState<ProductForm[]>([
     { brand: '', name: '', size: '100ml', cost: '', sale_price: '', image: undefined }
   ]);
@@ -103,7 +105,7 @@ export default function AddProductModal({
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (permissionResult.granted === false) {
-      Alert.alert('Permission Required', 'Please allow access to your photos to upload product images.');
+      Alert.alert(t('modals.addProduct.permissionRequired'), t('modals.addProduct.permissionMessage'));
       return;
     }
 
@@ -132,7 +134,7 @@ export default function AddProductModal({
 
     const hasExactMatch = allBrands.some(b => b.toLowerCase() === query);
     if (!hasExactMatch && brand.trim().length > 0) {
-      return [...matches, `➕ Add new brand: "${brand}"`];
+      return [...matches, t('modals.addProduct.addNewBrand', { brand })];
     }
 
     return matches;
@@ -150,7 +152,7 @@ export default function AddProductModal({
 
   const removeProduct = (index: number) => {
     if (products.length === 1) {
-      Alert.alert('Error', 'You must have at least one product');
+      Alert.alert(t('common.error'), t('modals.addProduct.atLeastOne'));
       return;
     }
     setProducts(products.filter((_, i) => i !== index));
@@ -161,15 +163,15 @@ export default function AddProductModal({
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
       if (!product.brand.trim()) {
-        Alert.alert('Error', `Product ${i + 1}: Please enter a brand name`);
+        Alert.alert(t('common.error'), t('modals.addProduct.enterBrand', { num: i + 1 }));
         return;
       }
       if (!product.name.trim()) {
-        Alert.alert('Error', `Product ${i + 1}: Please enter a product name`);
+        Alert.alert(t('common.error'), t('modals.addProduct.enterProductName', { num: i + 1 }));
         return;
       }
       if (!product.cost || parseFloat(product.cost) <= 0) {
-        Alert.alert('Error', `Product ${i + 1}: Please enter a valid cost`);
+        Alert.alert(t('common.error'), t('modals.addProduct.enterValidCost', { num: i + 1 }));
         return;
       }
     }
@@ -209,11 +211,11 @@ export default function AddProductModal({
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleCancel}>
-            <Text style={styles.cancelButton}>Cancel</Text>
+            <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Add Products ({products.length})</Text>
+          <Text style={styles.title}>{t('modals.addProduct.addProducts', { count: products.length })}</Text>
           <TouchableOpacity onPress={handleSubmit}>
-            <Text style={styles.saveButton}>Save All</Text>
+            <Text style={styles.saveButton}>{t('modals.addProduct.saveAll')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -228,10 +230,10 @@ export default function AddProductModal({
             return (
               <View key={index} style={styles.productCard}>
                 <View style={styles.productHeader}>
-                  <Text style={styles.productNumber}>Product {index + 1}</Text>
+                  <Text style={styles.productNumber}>{t('modals.addProduct.product')} {index + 1}</Text>
                   {products.length > 1 && (
                     <TouchableOpacity onPress={() => removeProduct(index)}>
-                      <Text style={styles.removeButton}>✕ Remove</Text>
+                      <Text style={styles.removeButton}>✕ {t('modals.addProduct.remove')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -245,7 +247,7 @@ export default function AddProductModal({
                         style={styles.changeImageButton}
                         onPress={() => pickImage(index)}
                       >
-                        <Text style={styles.changeImageText}>Change</Text>
+                        <Text style={styles.changeImageText}>{t('modals.addProduct.change')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.removeImageButton}
@@ -260,13 +262,13 @@ export default function AddProductModal({
                       onPress={() => pickImage(index)}
                     >
                       <Text style={styles.imageIcon}>📷</Text>
-                      <Text style={styles.imageText}>Add Image</Text>
+                      <Text style={styles.imageText}>{t('modals.addProduct.addImage')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
 
                 {/* Brand */}
-                <Text style={styles.label}>Brand *</Text>
+                <Text style={styles.label}>{t('catalog.brand')} *</Text>
                 {product.brand.trim() && showBrandSuggestions !== index ? (
                   // Show selected brand
                   <View style={styles.selectedBrandCard}>
@@ -278,14 +280,14 @@ export default function AddProductModal({
                         setShowBrandSuggestions(index);
                       }}
                     >
-                      <Text style={styles.editBrandButtonText}>Edit</Text>
+                      <Text style={styles.editBrandButtonText}>{t('common.edit')}</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <>
                     <TextInput
                       style={styles.input}
-                      placeholder="Start typing brand name..."
+                      placeholder={t('modals.addProduct.brandPlaceholder')}
                       value={product.brand}
                       onChangeText={(text) => {
                         updateProduct(index, 'brand', text);
@@ -334,16 +336,16 @@ export default function AddProductModal({
                 )}
 
                 {/* Product Name */}
-                <Text style={styles.label}>Product Name *</Text>
+                <Text style={styles.label}>{t('modals.addProduct.productName')}</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter product name..."
+                  placeholder={t('modals.addProduct.productNamePlaceholder')}
                   value={product.name}
                   onChangeText={(text) => updateProduct(index, 'name', text)}
                 />
 
                 {/* Size Selector */}
-                <Text style={styles.label}>Size *</Text>
+                <Text style={styles.label}>{t('modals.addProduct.size')}</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
@@ -369,7 +371,7 @@ export default function AddProductModal({
                 </ScrollView>
 
                 {/* Unit Cost */}
-                <Text style={styles.label}>Unit Cost ($) *</Text>
+                <Text style={styles.label}>{t('modals.addProduct.unitCost')}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
@@ -379,7 +381,7 @@ export default function AddProductModal({
                 />
 
                 {/* Sale Price */}
-                <Text style={styles.label}>Sale Price ($)</Text>
+                <Text style={styles.label}>{t('modals.addProduct.salePrice')}</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="0.00"
@@ -387,14 +389,14 @@ export default function AddProductModal({
                   onChangeText={(text) => updateProduct(index, 'sale_price', text)}
                   keyboardType="decimal-pad"
                 />
-                <Text style={styles.helperText}>Suggested retail price</Text>
+                <Text style={styles.helperText}>{t('modals.addProduct.salePriceHelper')}</Text>
               </View>
             );
           })}
 
           {/* Add Another Product Button */}
           <TouchableOpacity style={styles.addProductButton} onPress={addProduct}>
-            <Text style={styles.addProductButtonText}>+ Add Another Product</Text>
+            <Text style={styles.addProductButtonText}>{t('modals.addProduct.addAnotherProduct')}</Text>
           </TouchableOpacity>
 
           <View style={styles.bottomSpacer} />

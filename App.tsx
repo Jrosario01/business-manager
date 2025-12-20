@@ -4,10 +4,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 
+// i18n
+import './src/i18n/i18n';
+
 // Supabase
 import { supabase } from './src/config/supabase';
 import { useAuthStore } from './src/store/authStore';
 import { useProductsStore } from './src/store/productsStore';
+import { useExchangeRateStore } from './src/store/exchangeRateStore';
 import { migrateToSupabase, backupAsyncStorageData } from './src/utils/migrateToSupabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -20,7 +24,13 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const { session, setSession, setIsLoading, isLoading } = useAuthStore();
   const { seedInitialProducts } = useProductsStore();
+  const { loadCachedRate } = useExchangeRateStore();
   const [migrationComplete, setMigrationComplete] = useState(false);
+
+  // Initialize exchange rate on app start
+  useEffect(() => {
+    loadCachedRate();
+  }, []);
 
   useEffect(() => {
     // Check for existing session

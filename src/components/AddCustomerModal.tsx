@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
 import { useSalesStore } from '../store/salesStore';
 
@@ -28,6 +29,7 @@ interface AddCustomerModalProps {
 }
 
 export default function AddCustomerModal({ visible, onClose, onSubmit, initialData, customerId, isEdit = false, onDelete }: AddCustomerModalProps) {
+  const { t } = useTranslation();
   const { products: catalogProducts, searchProducts, loadProducts } = useProductsStore();
   const { sales } = useSalesStore();
   const [name, setName] = useState(initialData?.name || '');
@@ -73,11 +75,11 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
 
   const handleSubmit = () => {
     if (!name.trim()) {
-      alert('Please enter customer name');
+      Alert.alert(t('common.error'), t('modals.addCustomer.enterName'));
       return;
     }
     if (!phone.trim()) {
-      alert('Please enter phone number');
+      Alert.alert(t('common.error'), t('modals.addCustomer.enterPhone'));
       return;
     }
 
@@ -114,12 +116,12 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
 
   const handleDelete = () => {
     Alert.alert(
-      'Delete Customer',
-      'Are you sure you want to delete this customer? This action cannot be undone.',
+      t('modals.addCustomer.deleteCustomer'),
+      t('modals.addCustomer.deleteConfirm'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             if (onDelete) {
@@ -165,47 +167,47 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleCancel}>
-            <Text style={styles.cancelButton}>Cancel</Text>
+            <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>{isEdit ? 'Edit Customer' : 'Add Customer'}</Text>
+          <Text style={styles.title}>{isEdit ? t('modals.addCustomer.editCustomer') : t('modals.addCustomer.addCustomer')}</Text>
           <TouchableOpacity onPress={handleSubmit}>
-            <Text style={styles.saveButton}>Save</Text>
+            <Text style={styles.saveButton}>{t('common.save')}</Text>
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           {/* Customer Info */}
-          <Text style={styles.sectionTitle}>Customer Information</Text>
+          <Text style={styles.sectionTitle}>{t('modals.addCustomer.customerInfo')}</Text>
           <View style={styles.card}>
-            <Text style={styles.label}>Full Name *</Text>
+            <Text style={styles.label}>{t('modals.addCustomer.fullName')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter customer name..."
+              placeholder={t('modals.addCustomer.namePlaceholder')}
               value={name}
               onChangeText={setName}
             />
 
-            <Text style={styles.label}>Phone Number *</Text>
+            <Text style={styles.label}>{t('modals.addCustomer.phoneNumber')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="XXX-XXX-XXXX"
+              placeholder={t('modals.addCustomer.phonePlaceholder')}
               value={phone}
               onChangeText={handlePhoneChange}
               keyboardType="phone-pad"
               maxLength={12}
             />
             <Text style={styles.helperText}>
-              Enter 10 digits (e.g., 809-555-0123)
+              {t('modals.addCustomer.phoneHelper')}
             </Text>
           </View>
 
           {/* Wishlist */}
-          <Text style={styles.sectionTitle}>Wishlist (Optional)</Text>
+          <Text style={styles.sectionTitle}>{t('modals.addCustomer.wishlist')}</Text>
           <View style={styles.card}>
-            <Text style={styles.label}>Add products they're interested in</Text>
+            <Text style={styles.label}>{t('modals.addCustomer.wishlistLabel')}</Text>
             <TextInput
               style={styles.input}
-              placeholder="Search catalog products..."
+              placeholder={t('modals.addCustomer.searchProducts')}
               value={wishlistInput}
               onChangeText={(text) => {
                 setWishlistInput(text);
@@ -256,18 +258,18 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
             {showSuggestions && suggestions.length === 0 && wishlistInput.length > 0 && (
               <View style={styles.noResults}>
                 <Text style={styles.noResultsText}>
-                  No products found. Try a different search.
+                  {t('modals.addCustomer.noProducts')}
                 </Text>
               </View>
             )}
 
             {wishlist.length > 0 && (
               <View style={styles.wishlistItems}>
-                <Text style={styles.wishlistTitle}>Wishlist Items:</Text>
+                <Text style={styles.wishlistTitle}>{t('modals.addCustomer.wishlistItems')}</Text>
                 {wishlist.map((item, index) => (
                   <View key={index} style={styles.wishlistItem}>
                     <Text style={styles.wishlistItemText}>{item}</Text>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => removeFromWishlist(index)}
                       style={styles.removeButton}
                     >
@@ -281,14 +283,14 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
 
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
-              💡 Balance and purchase history will be tracked automatically when you make sales to this customer.
+              {t('modals.addCustomer.infoMessage')}
             </Text>
           </View>
 
           {/* Purchase History */}
           {isEdit && customerSales.length > 0 && (
             <>
-              <Text style={styles.sectionTitle}>Purchase History</Text>
+              <Text style={styles.sectionTitle}>{t('modals.addCustomer.purchaseHistory')}</Text>
               <View style={styles.card}>
                 {customerSales.map((sale, index) => (
                   <View key={sale.id} style={[styles.historyItem, index > 0 && styles.historyItemBorder]}>
@@ -307,7 +309,7 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
                     </View>
                     <View style={styles.historyFooter}>
                       <Text style={[styles.historyStatus, sale.paymentStatus === 'paid' ? styles.historyStatusPaid : styles.historyStatusDue]}>
-                        {sale.paymentStatus === 'paid' ? '✓ Paid' : `Due: $${(sale.totalRevenue - sale.amountPaid).toFixed(2)}`}
+                        {sale.paymentStatus === 'paid' ? t('modals.addCustomer.paidStatus') : t('modals.addCustomer.dueStatus', { amount: (sale.totalRevenue - sale.amountPaid).toFixed(2) })}
                       </Text>
                     </View>
                   </View>
@@ -319,7 +321,7 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
           {/* Delete Button */}
           {isEdit && onDelete && (
             <TouchableOpacity onPress={handleDelete} style={styles.deleteButtonBottom}>
-              <Text style={styles.deleteButtonText}>Delete Customer</Text>
+              <Text style={styles.deleteButtonText}>{t('modals.addCustomer.deleteCustomer')}</Text>
             </TouchableOpacity>
           )}
 

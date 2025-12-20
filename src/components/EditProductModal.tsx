@@ -11,6 +11,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -98,6 +99,7 @@ export default function EditProductModal({
   product,
   existingBrands,
 }: EditProductModalProps) {
+  const { t } = useTranslation();
   const [brand, setBrand] = useState('');
   const [name, setName] = useState('');
   const [size, setSize] = useState('100ml');
@@ -140,7 +142,7 @@ export default function EditProductModal({
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (permissionResult.granted === false) {
-      Alert.alert('Permission Required', 'Please allow access to your photos to upload product images.');
+      Alert.alert(t('modals.editProduct.permissionRequired'), t('modals.editProduct.permissionMessage'));
       return;
     }
 
@@ -160,15 +162,15 @@ export default function EditProductModal({
     if (!product) return;
 
     if (!brand.trim()) {
-      Alert.alert('Error', 'Please enter a brand name');
+      Alert.alert(t('common.error'), t('modals.editProduct.enterBrand'));
       return;
     }
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a product name');
+      Alert.alert(t('common.error'), t('modals.editProduct.enterProductName'));
       return;
     }
     if (!cost || parseFloat(cost) <= 0) {
-      Alert.alert('Error', 'Please enter a valid cost');
+      Alert.alert(t('common.error'), t('modals.editProduct.enterValidCost'));
       return;
     }
 
@@ -189,12 +191,12 @@ export default function EditProductModal({
     if (!product) return;
 
     Alert.alert(
-      'Delete Product',
-      `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
+      t('catalog.deleteProduct'),
+      t('modals.editProduct.deleteConfirm', { name: product.name }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: () => {
             onDelete(product.id);
@@ -242,7 +244,7 @@ export default function EditProductModal({
           </TouchableOpacity>
           <View style={styles.titleContainer}>
             <Text style={styles.titleIcon}>✏️</Text>
-            <Text style={styles.title}>Edit Product</Text>
+            <Text style={styles.title}>{t('catalog.editProduct')}</Text>
           </View>
           <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
             <Text style={styles.saveButton}>✓</Text>
@@ -259,7 +261,7 @@ export default function EditProductModal({
                   style={styles.changeImageButton}
                   onPress={pickImage}
                 >
-                  <Text style={styles.changeImageText}>Change</Text>
+                  <Text style={styles.changeImageText}>{t('modals.editProduct.change')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.removeImageButton}
@@ -274,18 +276,18 @@ export default function EditProductModal({
                 onPress={pickImage}
               >
                 <Text style={styles.imageIcon}>📷</Text>
-                <Text style={styles.imageText}>Add Image</Text>
+                <Text style={styles.imageText}>{t('modals.editProduct.addImage')}</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* Brand Input with Autocomplete */}
           <View style={styles.card}>
-            <Text style={styles.label}>🏷️ Brand *</Text>
+            <Text style={styles.label}>🏷️ {t('catalog.brand')} *</Text>
             <View style={styles.brandCard}>
               <TextInput
                 style={styles.input}
-                placeholder="Start typing brand name..."
+                placeholder={t('modals.editProduct.brandPlaceholder')}
                 placeholderTextColor="#999"
                 value={brand}
                 onChangeText={(text) => {
@@ -325,7 +327,7 @@ export default function EditProductModal({
                         {displayText}
                       </Text>
                       {!isCreateNew && existingBrands.includes(suggestion) && (
-                        <Text style={styles.existingBadge}>✓ Existing</Text>
+                        <Text style={styles.existingBadge}>✓ {t('modals.editProduct.existing')}</Text>
                       )}
                     </TouchableOpacity>
                   );
@@ -337,10 +339,10 @@ export default function EditProductModal({
 
           {/* Product Name */}
           <View style={styles.card}>
-            <Text style={styles.label}>📦 Product Name *</Text>
+            <Text style={styles.label}>📦 {t('catalog.productName')} *</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter product name..."
+              placeholder={t('modals.editProduct.productNamePlaceholder')}
               placeholderTextColor="#999"
               value={name}
               onChangeText={setName}
@@ -349,7 +351,7 @@ export default function EditProductModal({
 
           {/* Size Selector */}
           <View style={styles.card}>
-            <Text style={styles.label}>📏 Size *</Text>
+            <Text style={styles.label}>📏 {t('catalog.size')} *</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -377,7 +379,7 @@ export default function EditProductModal({
 
           {/* Unit Cost */}
           <View style={styles.card}>
-            <Text style={styles.label}>💰 Unit Cost ($) *</Text>
+            <Text style={styles.label}>💰 {t('modals.editProduct.unitCost')} *</Text>
             <TextInput
               style={styles.input}
               placeholder="0.00"
@@ -390,7 +392,7 @@ export default function EditProductModal({
 
           {/* Sale Price */}
           <View style={styles.card}>
-            <Text style={styles.label}>💵 Sale Price ($)</Text>
+            <Text style={styles.label}>💵 {t('catalog.salePrice')} ($)</Text>
             <TextInput
               style={styles.input}
               placeholder="0.00"
@@ -399,12 +401,12 @@ export default function EditProductModal({
               onChangeText={setSalePrice}
               keyboardType="decimal-pad"
             />
-            <Text style={styles.helperText}>Suggested retail price for customers</Text>
+            <Text style={styles.helperText}>{t('modals.editProduct.salePriceHelper')}</Text>
           </View>
 
           {/* Delete Button */}
           <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-            <Text style={styles.deleteButtonText}>🗑️ Delete Product</Text>
+            <Text style={styles.deleteButtonText}>🗑️ {t('catalog.deleteProduct')}</Text>
           </TouchableOpacity>
 
           <View style={styles.bottomSpacer} />

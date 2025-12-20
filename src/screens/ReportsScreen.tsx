@@ -12,6 +12,7 @@ import {
 import * as Print from 'expo-print';
 import { format, startOfWeek, startOfMonth, startOfYear, endOfWeek, endOfMonth, endOfYear, isWithinInterval } from 'date-fns';
 import { PieChart } from 'react-native-chart-kit';
+import { useTranslation } from 'react-i18next';
 import { useShipmentsStore } from '../store/shipmentsStore';
 import { useSalesStore } from '../store/salesStore';
 import { useExchangeRateStore } from '../store/exchangeRateStore';
@@ -20,6 +21,7 @@ type TimePeriod = 'weekly' | 'monthly' | 'yearly' | 'all';
 type ReportTab = 'overview' | 'shipments';
 
 export default function ReportsScreen() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('monthly');
   const [shipmentsAllocations, setShipmentsAllocations] = useState<Map<string, any[]>>(new Map());
@@ -100,13 +102,14 @@ export default function ReportsScreen() {
   // Calculate overview metrics
   const overviewMetrics = useMemo(() => {
     const totalRevenue = filteredSales.reduce((sum, sale) => sum + sale.totalRevenue, 0);
-    const totalCostUSD = filteredSales.reduce((sum, sale) => sum + sale.totalCost, 0);
+    // Convert each sale's cost using its own exchange rate for accuracy
+    const totalCostDOP = filteredSales.reduce((sum, sale) => {
+      const saleExchangeRate = sale.exchangeRateUsed || usdToDop; // Fallback to current if not set
+      return sum + (sale.totalCost * saleExchangeRate);
+    }, 0);
     const totalProfit = filteredSales.reduce((sum, sale) => sum + sale.profit, 0);
     const totalPaid = filteredSales.reduce((sum, sale) => sum + sale.amountPaid, 0);
     const totalOwed = totalRevenue - totalPaid;
-
-    // Convert cost to DOP for display consistency (sales are in DOP)
-    const totalCostDOP = totalCostUSD * usdToDop;
 
     return {
       salesCount: filteredSales.length,
@@ -127,11 +130,11 @@ export default function ReportsScreen() {
     const pending = filteredSales.filter(s => s.paymentStatus === 'pending').length;
 
     return [
-      { name: 'Paid', count: paid, color: '#34C759', legendFontColor: '#666', legendFontSize: 12 },
-      { name: 'Partial', count: partial, color: '#FF9500', legendFontColor: '#666', legendFontSize: 12 },
-      { name: 'Pending', count: pending, color: '#FF3B30', legendFontColor: '#666', legendFontSize: 12 },
+      { name: t('sales.paid'), count: paid, color: '#34C759', legendFontColor: '#666', legendFontSize: 12 },
+      { name: t('sales.partial'), count: partial, color: '#FF9500', legendFontColor: '#666', legendFontSize: 12 },
+      { name: t('sales.pending'), count: pending, color: '#FF3B30', legendFontColor: '#666', legendFontSize: 12 },
     ].filter(item => item.count > 0); // Only show statuses that exist
-  }, [filteredSales]);
+  }, [filteredSales, t]);
 
   // Calculate top selling products
   const topProductsData = useMemo(() => {
@@ -168,7 +171,9 @@ export default function ReportsScreen() {
   const shipmentMetrics = useMemo(() => {
     return shipments.map(shipment => {
       const totalCostUSD = shipment.total_cost || 0;
-      const totalCostDOP = totalCostUSD * usdToDop;
+      // Use the exchange rate from when shipment was created, not current rate
+      const exchangeRate = shipment.exchange_rate_used || usdToDop; // Fallback to current if not set
+      const totalCostDOP = totalCostUSD * exchangeRate;
 
       // Calculate total units and sold units
       const totalUnits = shipment.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -238,6 +243,7 @@ export default function ReportsScreen() {
         createdDate: shipment.created_at,
         soldUnits: soldUnits,
         remainingUnits: remainingUnits,
+        totalUnits: totalUnits,
         totalRevenue: totalRevenue,        // 100% accurate from allocations
         totalProfit: totalProfit,          // 100% accurate from allocations
         totalPaid: totalPaid,              // Proportional based on allocation revenue
@@ -269,40 +275,40 @@ export default function ReportsScreen() {
             </style>
           </head>
           <body>
-            <h1>Shipment Report: ${shipment.name}</h1>
+            <h1>${t('reports.exportShipmentReport')}: ${shipment.name}</h1>
             <p class="date">Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
-            <p class="date">Created: ${format(new Date(shipment.createdDate), 'MMMM dd, yyyy')}</p>
+            <p class="date">${t('reports.createdOn', { date: format(new Date(shipment.createdDate), 'MMMM dd, yyyy') })}</p>
 
             <div class="metric-row">
-              <span class="metric-label">Initial Investment:</span>
+              <span class="metric-label">${t('reports.initialInvestment')}:</span>
               <span class="metric-value">${formatPesos(shipment.totalCost)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Units Sold / Remaining:</span>
-              <span class="metric-value">${shipment.soldUnits} / ${shipment.remainingUnits}</span>
+              <span class="metric-label">${t('reports.salesMade')}:</span>
+              <span class="metric-value">${t('reports.unitsSold', { sold: shipment.soldUnits, remaining: shipment.totalUnits })}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Revenue Generated:</span>
+              <span class="metric-label">${t('reports.revenueGenerated')}:</span>
               <span class="metric-value">${formatPesos(shipment.totalRevenue)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Profit Earned:</span>
+              <span class="metric-label">${t('reports.profitEarned')}:</span>
               <span class="metric-value profit">${formatPesos(shipment.totalProfit)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Amount Collected:</span>
+              <span class="metric-label">${t('reports.amountCollected')}:</span>
               <span class="metric-value">${formatPesos(shipment.totalPaid)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Amount Owed:</span>
+              <span class="metric-label">${t('reports.amountOwed')}:</span>
               <span class="metric-value owed">${formatPesos(shipment.totalOwed)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Investment Recovery:</span>
+              <span class="metric-label">${t('reports.investmentRecovery')}:</span>
               <span class="metric-value">${shipment.investmentRecovery.toFixed(1)}%</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Profit Margin:</span>
+              <span class="metric-label">${t('reports.profitMargin')}:</span>
               <span class="metric-value">${shipment.profitMargin.toFixed(1)}%</span>
             </div>
           </body>
@@ -313,18 +319,18 @@ export default function ReportsScreen() {
         html: htmlContent,
       });
 
-      Alert.alert('Success', 'Shipment report exported successfully!');
+      Alert.alert(t('common.success'), t('reports.exportShipmentReport') + ' exported successfully!');
     } catch (error) {
       console.error('Error generating PDF:', error);
-      Alert.alert('Error', 'Failed to generate PDF report');
+      Alert.alert(t('common.error'), 'Failed to generate PDF report');
     }
   };
 
   const generatePDF = async () => {
     try {
-      const periodLabel = timePeriod === 'all' ? 'All Time' :
-                         timePeriod === 'weekly' ? 'This Week' :
-                         timePeriod === 'monthly' ? 'This Month' : 'This Year';
+      const periodLabel = timePeriod === 'all' ? t('reports.all') :
+                         timePeriod === 'weekly' ? t('reports.weekly') :
+                         timePeriod === 'monthly' ? t('reports.monthly') : t('reports.yearly');
 
       let htmlContent = '';
 
@@ -346,36 +352,36 @@ export default function ReportsScreen() {
               </style>
             </head>
             <body>
-              <h1>Sales Report - ${periodLabel}</h1>
+              <h1>${t('reports.title')} - ${periodLabel}</h1>
               <p class="date">Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
 
-              <h2>Summary</h2>
+              <h2>${t('reports.overview')}</h2>
               <div class="metric-row">
-                <span class="metric-label">Total Sales:</span>
+                <span class="metric-label">${t('dashboard.totalSales')}:</span>
                 <span class="metric-value">${overviewMetrics.salesCount}</span>
               </div>
               <div class="metric-row">
-                <span class="metric-label">Total Revenue:</span>
+                <span class="metric-label">${t('reports.totalRevenue')}:</span>
                 <span class="metric-value">$${overviewMetrics.totalRevenue.toFixed(2)}</span>
               </div>
               <div class="metric-row">
-                <span class="metric-label">Total Cost:</span>
+                <span class="metric-label">${t('sales.totalCost')}:</span>
                 <span class="metric-value">$${overviewMetrics.totalCost.toFixed(2)}</span>
               </div>
               <div class="metric-row">
-                <span class="metric-label">Total Profit:</span>
+                <span class="metric-label">${t('reports.totalProfit')}:</span>
                 <span class="metric-value profit">$${overviewMetrics.totalProfit.toFixed(2)}</span>
               </div>
               <div class="metric-row">
-                <span class="metric-label">Profit Margin:</span>
+                <span class="metric-label">${t('dashboard.profitMargin')}:</span>
                 <span class="metric-value profit">${overviewMetrics.profitMargin.toFixed(1)}%</span>
               </div>
               <div class="metric-row">
-                <span class="metric-label">Amount Collected:</span>
+                <span class="metric-label">${t('reports.collected')}:</span>
                 <span class="metric-value">$${overviewMetrics.totalPaid.toFixed(2)}</span>
               </div>
               <div class="metric-row">
-                <span class="metric-label">Amount Owed:</span>
+                <span class="metric-label">${t('reports.amountOwed')}:</span>
                 <span class="metric-value owed">$${overviewMetrics.totalOwed.toFixed(2)}</span>
               </div>
             </body>
@@ -387,31 +393,31 @@ export default function ReportsScreen() {
           <div style="margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
             <h3 style="color: #007AFF; margin-top: 0;">${shipment.name}</h3>
             <div class="metric-row">
-              <span class="metric-label">Initial Investment:</span>
+              <span class="metric-label">${t('reports.initialInvestment')}:</span>
               <span class="metric-value">${formatPesos(shipment.totalCost)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Units Sold / Remaining:</span>
-              <span class="metric-value">${shipment.soldUnits} / ${shipment.remainingUnits}</span>
+              <span class="metric-label">${t('reports.salesMade')}:</span>
+              <span class="metric-value">${t('reports.unitsSold', { sold: shipment.soldUnits, remaining: shipment.totalUnits })}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Total Revenue:</span>
+              <span class="metric-label">${t('reports.totalRevenue')}:</span>
               <span class="metric-value">${formatPesos(shipment.totalRevenue)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Total Profit:</span>
+              <span class="metric-label">${t('reports.totalProfit')}:</span>
               <span class="metric-value profit">${formatPesos(shipment.totalProfit)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Amount Collected:</span>
+              <span class="metric-label">${t('reports.amountCollected')}:</span>
               <span class="metric-value">${formatPesos(shipment.totalPaid)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Amount Owed:</span>
+              <span class="metric-label">${t('reports.amountOwed')}:</span>
               <span class="metric-value owed">${formatPesos(shipment.totalOwed)}</span>
             </div>
             <div class="metric-row">
-              <span class="metric-label">Investment Recovery:</span>
+              <span class="metric-label">${t('reports.investmentRecovery')}:</span>
               <span class="metric-value">${shipment.investmentRecovery.toFixed(1)}%</span>
             </div>
           </div>
@@ -434,7 +440,7 @@ export default function ReportsScreen() {
               </style>
             </head>
             <body>
-              <h1>Shipment Performance Report</h1>
+              <h1>${t('reports.shipmentPerformance')}</h1>
               <p class="date">Generated on ${format(new Date(), 'MMMM dd, yyyy HH:mm')}</p>
 
               ${shipmentRows}
@@ -447,10 +453,10 @@ export default function ReportsScreen() {
         html: htmlContent,
       });
 
-      Alert.alert('Success', 'Report exported to PDF successfully!');
+      Alert.alert(t('common.success'), 'Report exported to PDF successfully!');
     } catch (error) {
       console.error('Error generating PDF:', error);
-      Alert.alert('Error', 'Failed to generate PDF report');
+      Alert.alert(t('common.error'), 'Failed to generate PDF report');
     }
   };
 
@@ -459,10 +465,10 @@ export default function ReportsScreen() {
       {/* Time Period Filter */}
       <View style={styles.filterContainer}>
         {[
-          { label: 'Week', value: 'weekly' as TimePeriod },
-          { label: 'Month', value: 'monthly' as TimePeriod },
-          { label: 'Year', value: 'yearly' as TimePeriod },
-          { label: 'All', value: 'all' as TimePeriod },
+          { label: t('reports.weekly'), value: 'weekly' as TimePeriod },
+          { label: t('reports.monthly'), value: 'monthly' as TimePeriod },
+          { label: t('reports.yearly'), value: 'yearly' as TimePeriod },
+          { label: t('reports.all'), value: 'all' as TimePeriod },
         ].map(period => (
           <TouchableOpacity
             key={period.value}
@@ -487,20 +493,22 @@ export default function ReportsScreen() {
         {/* First Row */}
         <View style={styles.metricsRow}>
           <View style={[styles.metricCard, styles.revenueCard]}>
-            <Text style={styles.metricLabel}>Total Revenue</Text>
+            <Text style={styles.metricLabel}>{t('reports.totalRevenue')}</Text>
             <Text style={[styles.metricValue, styles.revenueValue]}>
               {formatPesos(overviewMetrics.totalRevenue)}
             </Text>
-            <Text style={styles.metricSubtext}>{overviewMetrics.salesCount} sales</Text>
+            <Text style={styles.metricSubtext}>
+              {t('reports.salesCount', { count: overviewMetrics.salesCount })}
+            </Text>
           </View>
 
           <View style={[styles.metricCard, styles.profitCard]}>
-            <Text style={styles.metricLabel}>Total Profit</Text>
+            <Text style={styles.metricLabel}>{t('reports.totalProfit')}</Text>
             <Text style={[styles.metricValue, styles.profitValue]}>
               {formatPesos(overviewMetrics.totalProfit)}
             </Text>
             <Text style={styles.metricSubtext}>
-              {overviewMetrics.profitMargin.toFixed(1)}% margin
+              {t('reports.profitMargin')}
             </Text>
           </View>
         </View>
@@ -508,21 +516,21 @@ export default function ReportsScreen() {
         {/* Second Row */}
         <View style={styles.metricsRow}>
           <View style={[styles.metricCard, styles.collectedCard]}>
-            <Text style={styles.metricLabel}>Collected</Text>
+            <Text style={styles.metricLabel}>{t('reports.collected')}</Text>
             <Text style={[styles.metricValue, styles.collectedValue]}>
               {formatPesos(overviewMetrics.totalPaid)}
             </Text>
             <Text style={styles.metricSubtext}>
-              {overviewMetrics.collectionRate.toFixed(1)}% of revenue
+              {t('reports.collectionRate')}
             </Text>
           </View>
 
           <View style={[styles.metricCard, styles.owedCard]}>
-            <Text style={styles.metricLabel}>Amount Owed</Text>
+            <Text style={styles.metricLabel}>{t('reports.amountOwed')}</Text>
             <Text style={[styles.metricValue, styles.owedValue]}>
               {formatPesos(overviewMetrics.totalOwed)}
             </Text>
-            <Text style={styles.metricSubtext}>Outstanding</Text>
+            <Text style={styles.metricSubtext}>{t('reports.outstanding')}</Text>
           </View>
         </View>
       </View>
@@ -533,7 +541,7 @@ export default function ReportsScreen() {
           {/* Payment Status Chart */}
           {paymentStatusData.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Payment Status</Text>
+              <Text style={styles.sectionTitle}>{t('reports.paymentStatus')}</Text>
               <View style={styles.card}>
                 <PieChart
                   data={paymentStatusData.map(item => ({
@@ -560,7 +568,7 @@ export default function ReportsScreen() {
           {/* Top Products List */}
           {topProductsData.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Top Selling Products</Text>
+              <Text style={styles.sectionTitle}>{t('reports.topSellingProducts')}</Text>
               <View style={styles.card}>
                 <View style={styles.productsList}>
                   {topProductsData.map((product, index) => (
@@ -582,10 +590,10 @@ export default function ReportsScreen() {
 
           {/* Quick Stats */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Quick Stats</Text>
+            <Text style={styles.sectionTitle}>{t('reports.quickStats')}</Text>
             <View style={styles.card}>
               <View style={styles.quickStatRow}>
-                <Text style={styles.quickStatLabel}>Average Sale Value:</Text>
+                <Text style={styles.quickStatLabel}>{t('reports.avgSaleValue')}:</Text>
                 <Text style={styles.quickStatValue}>
                   {overviewMetrics.salesCount > 0
                     ? formatPesos(overviewMetrics.totalRevenue / overviewMetrics.salesCount)
@@ -593,11 +601,11 @@ export default function ReportsScreen() {
                 </Text>
               </View>
               <View style={styles.quickStatRow}>
-                <Text style={styles.quickStatLabel}>Collection Rate:</Text>
+                <Text style={styles.quickStatLabel}>{t('reports.collectionRateLabel')}:</Text>
                 <Text style={styles.quickStatValue}>{overviewMetrics.collectionRate.toFixed(1)}%</Text>
               </View>
               <View style={styles.quickStatRow}>
-                <Text style={styles.quickStatLabel}>Average Profit per Sale:</Text>
+                <Text style={styles.quickStatLabel}>{t('reports.avgProfitPerSale')}:</Text>
                 <Text style={styles.quickStatValue}>
                   {overviewMetrics.salesCount > 0
                     ? formatPesos(overviewMetrics.totalProfit / overviewMetrics.salesCount)
@@ -615,15 +623,15 @@ export default function ReportsScreen() {
 
   const renderShipments = () => (
     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-      <Text style={styles.sectionTitle}>Shipment Performance</Text>
+      <Text style={styles.sectionTitle}>{t('reports.shipmentPerformance')}</Text>
       <Text style={styles.sectionSubtitle}>
-        All amounts shown in Dominican Pesos (DOP)
+        {t('reports.allAmountsInPesos')}
       </Text>
 
       {shipmentMetrics.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No shipments yet</Text>
-          <Text style={styles.emptySubtext}>Create your first shipment to see reports here</Text>
+          <Text style={styles.emptyText}>{t('reports.noShipments')}</Text>
+          <Text style={styles.emptySubtext}>{t('reports.createFirstShipment')}</Text>
         </View>
       ) : (
         <>
@@ -633,7 +641,7 @@ export default function ReportsScreen() {
                 <View>
                   <Text style={styles.shipmentName}>{shipment.name}</Text>
                   <Text style={styles.shipmentDate}>
-                    Created {format(new Date(shipment.createdDate), 'MMM dd, yyyy')}
+                    {t('reports.createdOn', { date: format(new Date(shipment.createdDate), 'MMM dd, yyyy') })}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -646,47 +654,49 @@ export default function ReportsScreen() {
 
               <View style={styles.shipmentMetrics}>
                 <View style={styles.shipmentMetricRow}>
-                  <Text style={styles.shipmentMetricLabel}>Initial Investment:</Text>
+                  <Text style={styles.shipmentMetricLabel}>{t('reports.initialInvestment')}:</Text>
                   <Text style={styles.shipmentMetricValue}>{formatPesos(shipment.totalCost)}</Text>
                 </View>
                 <View style={styles.shipmentMetricRow}>
-                  <Text style={styles.shipmentMetricLabel}>Sales Made:</Text>
-                  <Text style={styles.shipmentMetricValue}>{shipment.soldUnits} / {shipment.remainingUnits}</Text>
+                  <Text style={styles.shipmentMetricLabel}>{t('reports.salesMade')}:</Text>
+                  <Text style={styles.shipmentMetricValue}>
+                    {t('reports.unitsSold', { sold: shipment.soldUnits, remaining: shipment.totalUnits })}
+                  </Text>
                 </View>
                 <View style={styles.shipmentMetricRow}>
-                  <Text style={styles.shipmentMetricLabel}>Revenue Generated:</Text>
+                  <Text style={styles.shipmentMetricLabel}>{t('reports.revenueGenerated')}:</Text>
                   <Text style={[styles.shipmentMetricValue, styles.revenueValue]}>
                     {formatPesos(shipment.totalRevenue)}
                   </Text>
                 </View>
                 <View style={styles.shipmentMetricRow}>
-                  <Text style={styles.shipmentMetricLabel}>Profit Earned:</Text>
+                  <Text style={styles.shipmentMetricLabel}>{t('reports.profitEarned')}:</Text>
                   <Text style={[styles.shipmentMetricValue, styles.profitValue]}>
                     {formatPesos(shipment.totalProfit)}
                   </Text>
                 </View>
                 <View style={styles.divider} />
                 <View style={styles.shipmentMetricRow}>
-                  <Text style={styles.shipmentMetricLabel}>Amount Collected:</Text>
+                  <Text style={styles.shipmentMetricLabel}>{t('reports.amountCollected')}:</Text>
                   <Text style={[styles.shipmentMetricValue, styles.collectedValue]}>
                     {formatPesos(shipment.totalPaid)}
                   </Text>
                 </View>
                 <View style={styles.shipmentMetricRow}>
-                  <Text style={styles.shipmentMetricLabel}>Amount Owed:</Text>
+                  <Text style={styles.shipmentMetricLabel}>{t('reports.amountOwed')}:</Text>
                   <Text style={[styles.shipmentMetricValue, styles.owedValue]}>
                     {formatPesos(shipment.totalOwed)}
                   </Text>
                 </View>
                 <View style={styles.divider} />
                 <View style={styles.shipmentMetricRow}>
-                  <Text style={styles.shipmentMetricLabel}>Investment Recovery:</Text>
+                  <Text style={styles.shipmentMetricLabel}>{t('reports.investmentRecovery')}:</Text>
                   <Text style={styles.shipmentMetricValue}>
                     {shipment.investmentRecovery.toFixed(1)}%
                   </Text>
                 </View>
                 <View style={styles.shipmentMetricRow}>
-                  <Text style={styles.shipmentMetricLabel}>Profit Margin:</Text>
+                  <Text style={styles.shipmentMetricLabel}>{t('reports.profitMargin')}:</Text>
                   <Text style={styles.shipmentMetricValue}>
                     {shipment.profitMargin.toFixed(1)}%
                   </Text>
@@ -697,7 +707,7 @@ export default function ReportsScreen() {
 
           {/* Export All Button at bottom */}
           <TouchableOpacity style={styles.exportAllButton} onPress={generatePDF}>
-            <Text style={styles.exportAllButtonText}>📄 Export All Shipments Report</Text>
+            <Text style={styles.exportAllButtonText}>📄 {t('reports.exportAllShipments')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -713,7 +723,7 @@ export default function ReportsScreen() {
     return (
       <View style={[styles.container, styles.centerContent]}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading reports...</Text>
+        <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
   }
@@ -727,7 +737,7 @@ export default function ReportsScreen() {
           onPress={() => setActiveTab('overview')}
         >
           <Text style={[styles.tabText, activeTab === 'overview' && styles.tabTextActive]}>
-            Overview
+            {t('reports.overview')}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -735,7 +745,7 @@ export default function ReportsScreen() {
           onPress={() => setActiveTab('shipments')}
         >
           <Text style={[styles.tabText, activeTab === 'shipments' && styles.tabTextActive]}>
-            Shipments
+            {t('reports.shipments')}
           </Text>
         </TouchableOpacity>
       </View>

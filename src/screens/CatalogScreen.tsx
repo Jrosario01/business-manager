@@ -12,12 +12,14 @@ import {
   Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import AddProductModal from '../components/AddProductModal';
 import EditProductModal from '../components/EditProductModal';
 import { useProductsStore, SupabaseProduct } from '../store/productsStore';
 import { useExchangeRateStore } from '../store/exchangeRateStore';
 
 export default function CatalogScreen() {
+  const { t } = useTranslation();
   const {
     products,
     isLoading,
@@ -101,13 +103,13 @@ export default function CatalogScreen() {
         </View>
         <View style={styles.productPrices}>
           <View style={styles.priceBox}>
-            <Text style={styles.priceLabel}>Cost</Text>
+            <Text style={styles.priceLabel}>{t('catalog.cost')}</Text>
             <Text style={styles.priceValue}>
               ${product.cost} (${(product.cost * usdToDop).toFixed(0)})
             </Text>
           </View>
           <View style={[styles.priceBox, styles.saleBox]}>
-            <Text style={[styles.priceLabel, styles.saleLabel]}>Sale</Text>
+            <Text style={[styles.priceLabel, styles.saleLabel]}>{t('catalog.sale')}</Text>
             <Text style={[styles.priceValue, styles.saleValue]}>
               ${(product.sale_price || (product.cost * 2 * usdToDop)).toFixed(0)}
             </Text>
@@ -156,7 +158,7 @@ export default function CatalogScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading products...</Text>
+        <Text style={styles.loadingText}>{t('catalog.loadingProducts')}</Text>
       </View>
     );
   }
@@ -175,7 +177,7 @@ export default function CatalogScreen() {
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Search products..."
+              placeholder={t('catalog.searchPlaceholder')}
               value={searchQuery}
               onChangeText={setSearchQuery}
               placeholderTextColor="rgba(255,255,255,0.7)"
@@ -194,18 +196,18 @@ export default function CatalogScreen() {
         <View style={styles.actionRow}>
           <View style={styles.statsContainer}>
             <Text style={styles.statsText}>
-              {filteredProducts.length} products
+              {filteredProducts.length} {t('catalog.products')}
             </Text>
             <Text style={styles.statsDot}>•</Text>
             <Text style={styles.statsText}>
-              {brands.length} brands
+              {brands.length} {t('catalog.brands')}
             </Text>
           </View>
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => setIsAddModalVisible(true)}
           >
-            <Text style={styles.addButtonText}>+ Add</Text>
+            <Text style={styles.addButtonText}>+ {t('catalog.add')}</Text>
           </TouchableOpacity>
         </View>
       </LinearGradient>
@@ -237,9 +239,9 @@ export default function CatalogScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No products found</Text>
+            <Text style={styles.emptyText}>{t('catalog.noProducts')}</Text>
             <Text style={styles.emptySubtext}>
-              {searchQuery ? 'Try a different search term' : 'Add your first product to get started'}
+              {searchQuery ? t('catalog.tryDifferentSearch') : t('catalog.addFirstProduct')}
             </Text>
           </View>
         }

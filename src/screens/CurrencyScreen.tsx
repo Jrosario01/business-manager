@@ -9,9 +9,11 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useExchangeRateStore } from '../store/exchangeRateStore';
 
 export default function CurrencyScreen() {
+  const { t } = useTranslation();
   const { usdToDop, isLoading, error, fetchRate, setManualRate, lastUpdated, isManual } = useExchangeRateStore();
   const [customRate, setCustomRate] = useState(usdToDop.toString());
   const [isFetching, setIsFetching] = useState(false);
@@ -21,7 +23,7 @@ export default function CurrencyScreen() {
   }, [usdToDop]);
 
   const formatLastUpdated = () => {
-    if (!lastUpdated) return 'Never';
+    if (!lastUpdated) return t('currency.never');
 
     const date = new Date(lastUpdated);
     const now = new Date();
@@ -30,10 +32,10 @@ export default function CurrencyScreen() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    if (diffMins < 1) return t('currency.justNow');
+    if (diffMins < 60) return t('currency.minutesAgo', { count: diffMins });
+    if (diffHours < 24) return t('currency.hoursAgo', { count: diffHours });
+    if (diffDays < 7) return t('currency.daysAgo', { count: diffDays });
 
     return date.toLocaleDateString() + ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -42,9 +44,9 @@ export default function CurrencyScreen() {
     setIsFetching(true);
     try {
       await fetchRate();
-      Alert.alert('Success', 'Exchange rate updated successfully');
+      Alert.alert(t('currency.success'), t('currency.updateSuccess'));
     } catch (err) {
-      Alert.alert('Error', 'Failed to fetch exchange rate. Please try again.');
+      Alert.alert(t('currency.error'), t('currency.fetchError'));
     } finally {
       setIsFetching(false);
     }
@@ -53,38 +55,38 @@ export default function CurrencyScreen() {
   const handleUpdateRate = async () => {
     const rate = parseFloat(customRate);
     if (isNaN(rate) || rate <= 0) {
-      Alert.alert('Invalid Rate', 'Please enter a valid exchange rate');
+      Alert.alert(t('currency.invalidRate'), t('currency.invalidRateMessage'));
       return;
     }
 
     try {
       await setManualRate(rate);
-      Alert.alert('Success', 'Exchange rate updated successfully');
+      Alert.alert(t('currency.success'), t('currency.updateSuccess'));
     } catch (err) {
-      Alert.alert('Error', 'Failed to update exchange rate. Please try again.');
+      Alert.alert(t('currency.error'), t('currency.updateError'));
     }
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.header}>
-        <Text style={styles.title}>Currency Settings</Text>
-        <Text style={styles.subtitle}>Manage USD to DOP exchange rate</Text>
+        <Text style={styles.title}>{t('currency.title')}</Text>
+        <Text style={styles.subtitle}>{t('currency.subtitle')}</Text>
       </View>
 
       {/* Current Rate Display */}
       <View style={styles.currentRateCard}>
-        <Text style={styles.cardLabel}>Current Exchange Rate</Text>
+        <Text style={styles.cardLabel}>{t('currency.currentExchangeRate')}</Text>
         <View style={styles.rateDisplay}>
           <Text style={styles.rateText}>1 USD = {usdToDop.toFixed(2)} DOP</Text>
         </View>
         <View style={styles.rateInfo}>
           <Text style={styles.lastUpdated}>
-            Last updated: {formatLastUpdated()}
+            {t('currency.lastUpdated')}: {formatLastUpdated()}
           </Text>
           {isManual && (
             <View style={styles.manualBadge}>
-              <Text style={styles.manualBadgeText}>Manual</Text>
+              <Text style={styles.manualBadgeText}>{t('currency.manual')}</Text>
             </View>
           )}
         </View>
@@ -92,9 +94,9 @@ export default function CurrencyScreen() {
 
       {/* Fetch from API */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Fetch Latest Rate</Text>
+        <Text style={styles.sectionTitle}>{t('currency.fetchLatestRate')}</Text>
         <Text style={styles.sectionDescription}>
-          Get the current USD to DOP exchange rate from ExchangeRate-API
+          {t('currency.fetchDescription')}
         </Text>
         <TouchableOpacity
           style={[styles.button, styles.primaryButton]}
@@ -104,16 +106,16 @@ export default function CurrencyScreen() {
           {isFetching ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text style={styles.buttonText}>Fetch Current Rate</Text>
+            <Text style={styles.buttonText}>{t('currency.fetchCurrentRate')}</Text>
           )}
         </TouchableOpacity>
       </View>
 
       {/* Manual Update */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Manual Update</Text>
+        <Text style={styles.sectionTitle}>{t('currency.manualUpdate')}</Text>
         <Text style={styles.sectionDescription}>
-          Enter a custom exchange rate manually
+          {t('currency.manualDescription')}
         </Text>
         <View style={styles.inputContainer}>
           <Text style={styles.inputPrefix}>1 USD =</Text>
@@ -130,7 +132,7 @@ export default function CurrencyScreen() {
           style={[styles.button, styles.secondaryButton]}
           onPress={handleUpdateRate}
         >
-          <Text style={[styles.buttonText, styles.secondaryButtonText]}>Update Rate</Text>
+          <Text style={[styles.buttonText, styles.secondaryButtonText]}>{t('currency.updateRate')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -141,10 +143,9 @@ export default function CurrencyScreen() {
       )}
 
       <View style={styles.infoBox}>
-        <Text style={styles.infoTitle}>ℹ️ About Exchange Rates</Text>
+        <Text style={styles.infoTitle}>ℹ️ {t('currency.aboutExchangeRates')}</Text>
         <Text style={styles.infoText}>
-          The exchange rate is used to convert product costs (in USD) to retail prices (in DOP).
-          You can either fetch the latest rate from the API or set a custom rate manually.
+          {t('currency.aboutDescription')}
         </Text>
       </View>
     </ScrollView>

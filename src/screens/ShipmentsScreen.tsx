@@ -12,14 +12,17 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import CreateShipmentModal from '../components/CreateShipmentModal';
 import DualCurrencyText from '../components/DualCurrencyText';
 import { useShipmentsStore, ShipmentWithItems } from '../store/shipmentsStore';
 import { useExchangeRateStore } from '../store/exchangeRateStore';
 
 export default function ShipmentsScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { shipments, loadShipments, isLoading } = useShipmentsStore();
+  const { usdToDop } = useExchangeRateStore();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<ShipmentWithItems | null>(null);
 
@@ -42,7 +45,7 @@ export default function ShipmentsScreen() {
       const shippingCost = shipmentData.totalShippingCost || 0;
       const totalCost = productsCost + shippingCost;
 
-      // Create shipment object
+      // Create shipment object with current exchange rate
       const shipment = {
         shipment_number: shipmentNumber,
         status: 'delivered' as 'preparing' | 'shipped' | 'delivered' | 'settled', // Always delivered
@@ -53,6 +56,7 @@ export default function ShipmentsScreen() {
         net_profit: 0, // Will be calculated as sales happen
         your_share: 0, // Will be calculated later
         partner_share: 0, // Will be calculated later
+        exchange_rate_used: usdToDop, // Save current USD to DOP rate
         notes: shipmentData.notes || '',
       };
 
@@ -71,7 +75,7 @@ export default function ShipmentsScreen() {
       setIsModalVisible(false);
     } catch (error) {
       console.error('Error creating shipment:', error);
-      Alert.alert('Error', 'Failed to create shipment. Please try again.');
+      Alert.alert(t('common.error'), t('shipments.errorCreatingShipment'));
     }
   };
 
@@ -109,7 +113,7 @@ export default function ShipmentsScreen() {
           </View>
           <View style={styles.shipmentMeta}>
             <Text style={styles.productCount}>{totalUnits}</Text>
-            <Text style={styles.productCountLabel}>units</Text>
+            <Text style={styles.productCountLabel}>{t('shipments.units')}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -120,7 +124,7 @@ export default function ShipmentsScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading shipments...</Text>
+        <Text style={styles.loadingText}>{t('shipments.loadingShipments')}</Text>
       </View>
     );
   }
@@ -132,11 +136,11 @@ export default function ShipmentsScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{totals.totalShipments}</Text>
-            <Text style={styles.statLabel}>Total Shipments</Text>
+            <Text style={styles.statLabel}>{t('shipments.totalShipments')}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>${totals.totalValue.toFixed(0)}</Text>
-            <Text style={styles.statLabel}>Total Investment</Text>
+            <Text style={styles.statLabel}>{t('shipments.totalInvestment')}</Text>
           </View>
         </View>
 
@@ -144,7 +148,7 @@ export default function ShipmentsScreen() {
           style={styles.newShipmentButton}
           onPress={() => setIsModalVisible(true)}
         >
-          <Text style={styles.newShipmentButtonText}>+ New Shipment</Text>
+          <Text style={styles.newShipmentButtonText}>+ {t('shipments.newShipment')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -157,15 +161,15 @@ export default function ShipmentsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📦</Text>
-            <Text style={styles.emptyText}>No shipments yet</Text>
+            <Text style={styles.emptyText}>{t('shipments.noShipments')}</Text>
             <Text style={styles.emptySubtext}>
-              Create your first shipment to get started
+              {t('shipments.createFirstShipment')}
             </Text>
             <TouchableOpacity
               style={styles.emptyButton}
               onPress={() => setIsModalVisible(true)}
             >
-              <Text style={styles.emptyButtonText}>+ Create Shipment</Text>
+              <Text style={styles.emptyButtonText}>+ {t('shipments.createShipment')}</Text>
             </TouchableOpacity>
           </View>
         }
@@ -188,9 +192,9 @@ export default function ShipmentsScreen() {
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <TouchableOpacity onPress={() => setSelectedShipment(null)}>
-                <Text style={styles.closeButton}>✕ Close</Text>
+                <Text style={styles.closeButton}>✕ {t('shipments.close')}</Text>
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>Shipment Details</Text>
+              <Text style={styles.modalTitle}>{t('shipments.shipmentDetails')}</Text>
               <View style={{ width: 60 }} />
             </View>
 
@@ -206,6 +210,7 @@ export default function ShipmentsScreen() {
 
 // Shipment Details Component (inline)
 function ShipmentDetailsView({ shipment }: { shipment: ShipmentWithItems }) {
+  const { t } = useTranslation();
   const { usdToDop, loadCachedRate } = useExchangeRateStore();
 
   useEffect(() => {
@@ -219,8 +224,11 @@ function ShipmentDetailsView({ shipment }: { shipment: ShipmentWithItems }) {
   const productCosts = shipment.items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0);
   const shippingPerItem = totalUnits > 0 ? shipment.shipping_cost / totalUnits : 0;
 
+  // Use the exchange rate from when this shipment was created
+  const shipmentExchangeRate = shipment.exchange_rate_used || usdToDop;
+
   const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
-  const formatWithPesos = (amount: number) => `${formatCurrency(amount)} ($${(amount * usdToDop).toFixed(0)})`;
+  const formatWithPesos = (amount: number) => `${formatCurrency(amount)} ($${(amount * shipmentExchangeRate).toFixed(0)})`;
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -234,6 +242,9 @@ function ShipmentDetailsView({ shipment }: { shipment: ShipmentWithItems }) {
         <Text style={styles.detailDate}>
           {shipment.delivered_date ? formatDate(shipment.delivered_date) : formatDate(shipment.created_at)}
         </Text>
+        <Text style={styles.exchangeRateText}>
+          {shipment.exchange_rate_used?.toFixed(2) || usdToDop.toFixed(2)}
+        </Text>
         {shipment.notes && (
           <Text style={styles.detailNotes}>{shipment.notes}</Text>
         )}
@@ -241,29 +252,29 @@ function ShipmentDetailsView({ shipment }: { shipment: ShipmentWithItems }) {
 
       {/* Financial Summary */}
       <View style={styles.detailCard}>
-        <Text style={styles.detailCardTitle}>Financial Summary</Text>
+        <Text style={styles.detailCardTitle}>{t('shipments.financialSummary')}</Text>
 
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Product Costs</Text>
+          <Text style={styles.detailLabel}>{t('shipments.productCosts')}</Text>
           <Text style={styles.detailValue}>{formatCurrency(productCosts)}</Text>
         </View>
 
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Shipping Cost</Text>
+          <Text style={styles.detailLabel}>{t('shipments.shippingCost')}</Text>
           <Text style={styles.detailValue}>
-            {formatCurrency(shipment.shipping_cost)} ({formatCurrency(shippingPerItem)}/item)
+            {formatCurrency(shipment.shipping_cost)} ({formatCurrency(shippingPerItem)}{t('shipments.perItem')})
           </Text>
         </View>
 
         <View style={[styles.detailRow, styles.totalInvestmentRow]}>
-          <Text style={styles.totalInvestmentLabel}>Total Cost</Text>
+          <Text style={styles.totalInvestmentLabel}>{t('shipments.totalCost')}</Text>
           <Text style={styles.totalInvestmentValue}>{formatCurrency(shipment.total_cost)}</Text>
         </View>
       </View>
 
       {/* Products */}
       <View style={styles.detailCard}>
-        <Text style={styles.detailCardTitle}>Products ({totalUnits} units • {shipment.items.length} types)</Text>
+        <Text style={styles.detailCardTitle}>{t('shipments.products')} ({totalUnits} {t('shipments.units')} • {shipment.items.length} {t('shipments.types')})</Text>
 
         {shipment.items.map((item, index) => (
           <View key={item.id} style={[styles.productRow, index > 0 && styles.productRowBorder]}>
@@ -293,8 +304,8 @@ function ShipmentDetailsView({ shipment }: { shipment: ShipmentWithItems }) {
                 </View>
 
                 <View style={styles.productStats}>
-                  <Text style={styles.productStat}>Cost: {formatWithPesos((item.product?.cost || item.unit_cost) + shippingPerItem)}</Text>
-                  <Text style={styles.productStat}>Qty: {item.quantity}</Text>
+                  <Text style={styles.productStat}>{t('catalog.cost')}: {formatWithPesos((item.product?.cost || item.unit_cost) + shippingPerItem)}</Text>
+                  <Text style={styles.productStat}>{t('shipments.qty')}: {item.quantity}</Text>
                 </View>
               </View>
             </View>
@@ -360,6 +371,12 @@ const styles = StyleSheet.create({
   detailDate: {
     fontSize: 14,
     color: '#666',
+    marginBottom: 8,
+  },
+  exchangeRateText: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '600',
     marginBottom: 8,
   },
   detailNotes: {

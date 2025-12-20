@@ -8,11 +8,13 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import AddCustomerModal from '../components/AddCustomerModal';
 import { useCustomersStore, Customer } from '../store/customersStore';
 import { useSalesStore } from '../store/salesStore';
 
 export default function CustomersScreen() {
+  const { t } = useTranslation();
   const { customers, loadCustomers, addCustomer, updateCustomer, deleteCustomer } = useCustomersStore();
   const { sales, loadSales } = useSalesStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,20 +140,20 @@ export default function CustomersScreen() {
           </View>
           {owes && (
             <View style={styles.balanceBadge}>
-              <Text style={styles.balanceText}>OWES</Text>
+              <Text style={styles.balanceText}>{t('customers.owes')}</Text>
             </View>
           )}
         </View>
 
         <View style={[styles.customerStats, isCompact && styles.customerStatsCompact]}>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Purchases</Text>
+            <Text style={styles.statLabel}>{t('customers.purchases')}</Text>
             <Text style={styles.statValue}>${stats.totalPurchases.toFixed(2)}</Text>
           </View>
 
           {owes && (
             <View style={[styles.statBox, styles.balanceBox]}>
-              <Text style={styles.statLabel}>Owes</Text>
+              <Text style={styles.statLabel}>{t('customers.owes')}</Text>
               <Text style={[styles.statValue, styles.balanceValue]}>
                 ${oweAmount.toFixed(2)}
               </Text>
@@ -160,7 +162,7 @@ export default function CustomersScreen() {
 
           {item.wishlist && item.wishlist.length > 0 && (
             <View style={[styles.statBox, styles.wishlistBox]}>
-              <Text style={styles.statLabel}>Wishlist</Text>
+              <Text style={styles.statLabel}>{t('customers.wishlist')}</Text>
               <Text style={styles.wishlistCount}>
                 {item.wishlist.length}
               </Text>
@@ -170,7 +172,7 @@ export default function CustomersScreen() {
 
         {item.wishlist && item.wishlist.length > 0 && (
           <View style={styles.wishlistSection}>
-            <Text style={styles.wishlistTitle}>Interested In:</Text>
+            <Text style={styles.wishlistTitle}>{t('customers.interestedIn')}:</Text>
             {item.wishlist.map((product, index) => (
               <Text key={index} style={styles.wishlistItem}>
                 • {product}
@@ -181,7 +183,7 @@ export default function CustomersScreen() {
 
         {stats.lastPurchase && (
           <Text style={styles.lastPurchase}>
-            Last purchase: {new Date(stats.lastPurchase).toLocaleDateString()}
+            {t('customers.lastPurchase')}: {new Date(stats.lastPurchase).toLocaleDateString()}
           </Text>
         )}
       </TouchableOpacity>
@@ -189,9 +191,9 @@ export default function CustomersScreen() {
   };
 
   const filterButtons = [
-    { label: 'All', value: 'all' as const },
-    { label: 'Owes Money', value: 'owes' as const },
-    { label: 'Has Wishlist', value: 'wishlist' as const },
+    { label: t('customers.all'), value: 'all' as const },
+    { label: t('customers.owesMoney'), value: 'owes' as const },
+    { label: t('customers.hasWishlist'), value: 'wishlist' as const },
   ];
 
   return (
@@ -201,7 +203,7 @@ export default function CustomersScreen() {
         <View style={styles.searchContainer}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search customers..."
+            placeholder={t('customers.searchPlaceholder')}
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholderTextColor="#999"
@@ -241,14 +243,14 @@ export default function CustomersScreen() {
       <View style={styles.actionBar}>
         <View style={styles.statsCompact}>
           <Text style={styles.statsCompactText}>
-            {filteredCustomers.length} customers • ${totalOwed} owed • {customersWithBalance} with balance
+            {filteredCustomers.length} {t('customers.customers')} • ${totalOwed} {t('customers.owed')} • {customersWithBalance} {t('customers.withBalance')}
           </Text>
         </View>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => setIsAddModalVisible(true)}
         >
-          <Text style={styles.addButtonText}>+ Add</Text>
+          <Text style={styles.addButtonText}>+ {t('customers.add')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -259,9 +261,9 @@ export default function CustomersScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No customers found</Text>
+            <Text style={styles.emptyText}>{t('customers.noCustomersFound')}</Text>
             <Text style={styles.emptySubtext}>
-              {searchQuery ? 'Try a different search term' : 'Add your first customer to get started'}
+              {searchQuery ? t('customers.tryDifferentSearch') : t('customers.addFirstCustomer')}
             </Text>
           </View>
         }
