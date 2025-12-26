@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../config/supabase';
+import { getTableName } from '../utils/getTableName';
+import { isDemoAccount } from '../utils/isDemoAccount';
 
 // Supabase customer type (matches database schema)
 export interface Customer {
@@ -45,7 +47,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { data, error } = await supabase
-        .from('customers')
+        .from(getTableName('customers'))
         .select('*')
         .order('name', { ascending: true });
 
@@ -61,8 +63,13 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
   addCustomer: async (customer) => {
     set({ error: null });
     try {
+      // Demo account limits
+      if (isDemoAccount() && get().customers.length >= 20) {
+        throw new Error('Demo account limit: Maximum 20 customers');
+      }
+
       const { data, error } = await supabase
-        .from('customers')
+        .from(getTableName('customers'))
         .insert([customer])
         .select()
         .single();
@@ -85,7 +92,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
     set({ error: null });
     try {
       const { error } = await supabase
-        .from('customers')
+        .from(getTableName('customers'))
         .update(customer)
         .eq('id', id);
 
@@ -105,7 +112,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
     set({ error: null });
     try {
       const { error } = await supabase
-        .from('customers')
+        .from(getTableName('customers'))
         .delete()
         .eq('id', id);
 
@@ -145,6 +152,11 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
         return existing;
       }
 
+      // Demo account limits
+      if (isDemoAccount() && get().customers.length >= 20) {
+        throw new Error('Demo account limit: Maximum 20 customers');
+      }
+
       // Create new customer if not found
       const newCustomer = {
         name,
@@ -152,7 +164,7 @@ export const useCustomersStore = create<CustomersState>((set, get) => ({
       };
 
       const { data, error } = await supabase
-        .from('customers')
+        .from(getTableName('customers'))
         .insert([newCustomer])
         .select()
         .single();

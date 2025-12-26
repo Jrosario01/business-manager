@@ -27,9 +27,11 @@ export default function CurrencySettingsModal({
     isManual,
     isLoading,
     error,
+    history,
     fetchRate,
     setManualRate,
     enableAutoFetch,
+    loadHistoricRates,
   } = useExchangeRateStore();
 
   const [manualRateInput, setManualRateInput] = useState(usdToDop.toFixed(4));
@@ -37,6 +39,7 @@ export default function CurrencySettingsModal({
   useEffect(() => {
     if (visible) {
       setManualRateInput(usdToDop.toFixed(4));
+      loadHistoricRates(30); // Load last 30 days
     }
   }, [visible, usdToDop]);
 
@@ -156,7 +159,7 @@ export default function CurrencySettingsModal({
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Automatic Updates</Text>
                 <Text style={styles.sectionDescription}>
-                  Exchange rates are fetched automatically from CurrencyAPI when the app opens (if older than 6 hours).
+                  Exchange rates are fetched automatically from CurrencyAPI twice daily (every 12 hours) and stored in the database for historic tracking.
                 </Text>
                 <TouchableOpacity
                   style={[styles.button, styles.refreshButton, isLoading && styles.buttonDisabled]}
@@ -211,12 +214,48 @@ export default function CurrencySettingsModal({
               )}
             </View>
 
+            {/* Historic Rates Section */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Historic Exchange Rates (Last 30 Days)</Text>
+              {history.length > 0 ? (
+                <View style={styles.historyContainer}>
+                  {history.slice(0, 10).map((rate, index) => {
+                    const date = new Date(rate.fetched_at);
+                    return (
+                      <View key={rate.id} style={styles.historyItem}>
+                        <Text style={styles.historyDate}>
+                          {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        <Text style={styles.historyRate}>
+                          {parseFloat(rate.rate.toString()).toFixed(4)} DOP
+                        </Text>
+                      </View>
+                    );
+                  })}
+                  {history.length > 10 && (
+                    <Text style={styles.historyMore}>
+                      + {history.length - 10} more rates in database
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.historyContainer}>
+                  <Text style={styles.historyEmpty}>
+                    No historic data yet. Rates will appear here after automatic fetches (every 12 hours).
+                    {'\n\n'}
+                    Check the console logs for any errors.
+                  </Text>
+                </View>
+              )}
+            </View>
+
             {/* API Info */}
             <View style={styles.infoBox}>
               <Text style={styles.infoBoxTitle}>ℹ️ About CurrencyAPI</Text>
               <Text style={styles.infoBoxText}>
                 Using CurrencyAPI free tier (300 requests/month).{'\n\n'}
-                Auto-fetch updates every 6 hours to stay within limits.{'\n\n'}
+                Auto-fetch updates twice daily (every 12 hours) to stay within limits.{'\n\n'}
+                All rates are stored in the database for historic tracking.{'\n\n'}
                 To add your API key, update the CURRENCYAPI_KEY in exchangeRateStore.ts
               </Text>
             </View>
@@ -417,5 +456,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#666',
+  },
+  historyContainer: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 12,
+    maxHeight: 300,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  historyDate: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
+  },
+  historyRate: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  historyMore: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  historyEmpty: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    padding: 20,
+    fontStyle: 'italic',
   },
 });

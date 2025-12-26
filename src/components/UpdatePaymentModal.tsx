@@ -8,7 +8,10 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  SafeAreaView,
+  Platform,
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -35,6 +38,7 @@ interface UpdatePaymentModalProps {
 export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }: UpdatePaymentModalProps) {
   const { t } = useTranslation();
   const [productPayments, setProductPayments] = useState<{ [index: number]: string }>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   // Reset payment fields when modal opens/closes
   useEffect(() => {
@@ -71,22 +75,31 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
         { text: t('common.cancel'), style: 'cancel' },
         {
           text: t('modals.updatePayment.payAll'),
-          onPress: () => {
-            // Set all products to fully paid
-            const fullPayments: { [index: number]: number } = {};
-            sale.products.forEach((product, index) => {
-              const productTotal = product.soldPrice * product.quantity;
-              fullPayments[index] = productTotal;
-            });
-            onSubmit(fullPayments);
-            resetForm();
+          onPress: async () => {
+            setIsSaving(true);
+            try {
+              // Set all products to fully paid
+              const fullPayments: { [index: number]: number } = {};
+              sale.products.forEach((product, index) => {
+                const productTotal = product.soldPrice * product.quantity;
+                fullPayments[index] = productTotal;
+              });
+              await onSubmit(fullPayments);
+              Alert.alert('Success', 'All balances paid in full!');
+              resetForm();
+            } catch (error) {
+              console.error('Error paying all balances:', error);
+              Alert.alert('Error', 'Failed to update payment. Please try again.');
+            } finally {
+              setIsSaving(false);
+            }
           },
         },
       ]
     );
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const updates: { [index: number]: number } = {};
 
     Object.entries(productPayments).forEach(([indexStr, valueStr]) => {
@@ -121,8 +134,18 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
       return;
     }
 
-    onSubmit(updates);
-    resetForm();
+    setIsSaving(true);
+
+    try {
+      await onSubmit(updates);
+      Alert.alert('Success', 'Payment updated successfully!');
+      resetForm();
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      Alert.alert('Error', 'Failed to update payment. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const resetForm = () => {
@@ -149,17 +172,15 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
       transparent={false}
       onRequestClose={handleCancel}
       presentationStyle="fullScreen"
+      statusBarTranslucent={true}
     >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
+      <View style={styles.container}>
           <View style={styles.header}>
-          <TouchableOpacity onPress={handleCancel}>
-            <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
+          <TouchableOpacity onPress={handleCancel} disabled={isSaving} style={styles.headerButton}>
+            <Text style={[styles.cancelButton, isSaving && styles.disabledButton]}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>{t('sales.updatePayment')}</Text>
-          <TouchableOpacity onPress={handleSubmit}>
-            <Text style={styles.saveButton}>{t('common.save')}</Text>
-          </TouchableOpacity>
+          <View style={styles.headerButton} />
         </View>
 
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
@@ -349,16 +370,17 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
           <View style={styles.footerButtons}>
             {totalBalance > 0 && (
               <TouchableOpacity
-                style={styles.payAllButton}
+                style={[styles.payAllButton, isSaving && styles.submitButtonDisabled]}
                 onPress={handleMarkAllPaid}
+                disabled={isSaving}
               >
                 <Text style={styles.payAllButtonText}>{t('modals.updatePayment.payAll')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.submitButton, totalPaymentChange === 0 && styles.submitButtonDisabled]}
+              style={[styles.submitButton, (totalPaymentChange === 0 || isSaving) && styles.submitButtonDisabled]}
               onPress={handleSubmit}
-              disabled={totalPaymentChange === 0}
+              disabled={totalPaymentChange === 0 || isSaving}
             >
               <Text style={styles.submitButtonText}>
                 {totalPaymentChange > 0 ? t('modals.updatePayment.savePayment') : t('modals.updatePayment.enterAmount')}
@@ -366,44 +388,70 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
             </TouchableOpacity>
           </View>
         </View>
-        </View>
-      </SafeAreaView>
+
+        {/* Full Screen Loading Overlay */}
+        {isSaving && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#00ffff" />
+              <Text style={styles.loadingText}>Updating payment...</Text>
+            </View>
+          </View>
+        )}
+      </View>
     </Modal>
   );
 }
 
+const { height: screenHeight } = Dimensions.get('window');
+const getHeaderPaddingTop = () => {
+  if (Platform.OS === 'android') {
+    const statusBarHeight = StatusBar.currentHeight || 0;
+    return statusBarHeight + (screenHeight > 800 ? 30 : 25);
+  } else {
+    return screenHeight > 800 ? 60 : 50;
+  }
+};
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
+    paddingBottom: 0,
+    marginBottom: 0,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'white',
+    padding: 16,
+    paddingTop: getHeaderPaddingTop(),
+    paddingBottom: 20,
+    backgroundColor: '#1a5490',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
+  },
+  headerButton: {
+    minWidth: 70,
   },
   cancelButton: {
     fontSize: 15,
     color: '#FF3B30',
     fontWeight: '600',
   },
+  disabledButton: {
+    opacity: 0.5,
+  },
   title: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#333',
+    color: 'white',
+    flex: 1,
+    textAlign: 'center',
   },
   saveButton: {
     fontSize: 15,
-    color: '#34C759',
+    color: '#00ffff',
     fontWeight: '600',
   },
   content: {
@@ -447,13 +495,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#666',
+    color: '#e0cf80',
     marginBottom: 10,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   productCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -472,14 +520,14 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     flex: 1,
     marginRight: 8,
   },
   productPrice: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   statusRow: {
     flexDirection: 'row',
@@ -494,7 +542,7 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     fontSize: 11,
-    color: '#666',
+    color: '#1a5490',
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -505,7 +553,7 @@ const styles = StyleSheet.create({
   },
   statusLabelDue: {
     fontSize: 11,
-    color: '#666',
+    color: '#1a5490',
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -522,7 +570,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 8,
   },
   paymentRow: {
@@ -537,20 +585,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#007AFF',
+    borderColor: '#1a5490',
     paddingHorizontal: 12,
   },
   dollarSign: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
     marginRight: 4,
   },
   paymentInput: {
     flex: 1,
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     paddingVertical: 12,
   },
   clearButton: {
@@ -632,9 +680,9 @@ const styles = StyleSheet.create({
     color: '#2E7D32',
   },
   footer: {
-    backgroundColor: 'white',
+    backgroundColor: '#1a5490',
     borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
+    borderTopColor: 'rgba(0, 255, 255, 0.2)',
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: 20,
@@ -648,7 +696,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 13,
-    color: '#666',
+    color: 'white',
     fontWeight: '600',
   },
   summaryLabelPaid: {
@@ -719,5 +767,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#2E7D32',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContainer: {
+    backgroundColor: '#1a5490',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    color: '#00ffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
   },
 });

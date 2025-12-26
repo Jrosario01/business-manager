@@ -137,7 +137,10 @@
     "purchases": "Compras",
     "wishlist": "Lista de Deseos",
     "interestedIn": "Interesado En",
-    "lastPurchase": "Última compra"
+    "lastPurchase": "Última compra",
+    "noOneOwes": "Nadie debe dinero",
+    "noWishlists": "No hay listas de deseos aún",
+    "allCaughtUp": "¡Estás al día!"
   },
   "shipments": {
     "title": "Envíos",

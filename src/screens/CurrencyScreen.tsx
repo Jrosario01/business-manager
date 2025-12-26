@@ -14,12 +14,13 @@ import { useExchangeRateStore } from '../store/exchangeRateStore';
 
 export default function CurrencyScreen() {
   const { t } = useTranslation();
-  const { usdToDop, isLoading, error, fetchRate, setManualRate, lastUpdated, isManual } = useExchangeRateStore();
+  const { usdToDop, isLoading, error, fetchRate, setManualRate, lastUpdated, isManual, history, loadHistoricRates } = useExchangeRateStore();
   const [customRate, setCustomRate] = useState(usdToDop.toString());
   const [isFetching, setIsFetching] = useState(false);
 
   useEffect(() => {
-    setCustomRate(usdToDop.toString());
+    setCustomRate(usdToDop.toFixed(2));
+    loadHistoricRates(30); // Load last 30 days
   }, [usdToDop]);
 
   const formatLastUpdated = () => {
@@ -134,6 +135,50 @@ export default function CurrencyScreen() {
         >
           <Text style={[styles.buttonText, styles.secondaryButtonText]}>{t('currency.updateRate')}</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Historic Exchange Rates */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Historic Exchange Rates (Last 30 Days)</Text>
+        <Text style={styles.sectionDescription}>
+          Rates are fetched automatically every 12 hours and stored for tracking
+        </Text>
+        {history.length > 0 ? (
+          <View style={styles.historyList}>
+            {history.slice(0, 10).map((rate) => {
+              const date = new Date(rate.fetched_at);
+              return (
+                <View key={rate.id} style={styles.historyItem}>
+                  <View style={styles.historyLeft}>
+                    <Text style={styles.historyDate}>
+                      {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </Text>
+                    <Text style={styles.historyTime}>
+                      {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                  <Text style={styles.historyRate}>
+                    {parseFloat(rate.rate.toString()).toFixed(2)} DOP
+                  </Text>
+                </View>
+              );
+            })}
+            {history.length > 10 && (
+              <Text style={styles.historyMore}>
+                + {history.length - 10} more rates in database
+              </Text>
+            )}
+          </View>
+        ) : (
+          <View style={styles.emptyHistory}>
+            <Text style={styles.emptyHistoryText}>
+              No historic data yet. Exchange rates will appear here after automatic fetches (every 12 hours).
+            </Text>
+            <Text style={styles.emptyHistoryHint}>
+              Check console logs for any database errors.
+            </Text>
+          </View>
+        )}
       </View>
 
       {error && (
@@ -317,5 +362,62 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#333',
     lineHeight: 20,
+  },
+  historyList: {
+    marginTop: 8,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  historyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  historyDate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  historyTime: {
+    fontSize: 12,
+    color: '#999',
+  },
+  historyRate: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  historyMore: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  emptyHistory: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyHistoryText: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptyHistoryHint: {
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

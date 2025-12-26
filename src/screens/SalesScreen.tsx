@@ -5,12 +5,15 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Linking,
+  Alert,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import CreateSaleModal from '../components/CreateSaleModal';
 import UpdatePaymentModal from '../components/UpdatePaymentModal';
 import { useSalesStore, Sale } from '../store/salesStore';
 import { useShipmentsStore } from '../store/shipmentsStore';
+import { isDemoAccount } from '../utils/isDemoAccount';
 
 export default function SalesScreen() {
   const { t } = useTranslation();
@@ -111,9 +114,61 @@ export default function SalesScreen() {
     }
   };
 
+  const sendReceiptViaWhatsApp = async (sale: Sale) => {
+    // Block for demo accounts
+    if (isDemoAccount()) {
+      Alert.alert(
+        'Demo Account',
+        'WhatsApp receipt sending is disabled for demo accounts. This feature is available for authenticated users.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Format receipt as text
+    const currencySymbol = sale.currency === 'DOP' ? 'RD$' : '$';
+    const statusEmoji = sale.paymentStatus === 'paid' ? '✅' : sale.paymentStatus === 'partial' ? '⚠️' : '⏳';
+
+    const productLines = sale.products.map(p =>
+      `• ${p.quantity}x ${p.brand} ${p.name} ${p.size} - ${currencySymbol}${(p.soldPrice * p.quantity).toLocaleString('en-US', { minimumFractionDigits: 0 })}`
+    ).join('\n');
+
+    const receipt = `🧾 *RECEIPT - GJ Essence*
+
+*Customer:* ${sale.customerName}
+*Date:* ${new Date(sale.date).toLocaleDateString()} ${new Date(sale.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+*Products:*
+${productLines}
+
+*Total:* ${currencySymbol}${sale.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0 })}
+*Paid:* ${currencySymbol}${sale.amountPaid.toLocaleString('en-US', { minimumFractionDigits: 0 })}${sale.paymentStatus !== 'paid' ? `\n*Balance:* ${currencySymbol}${(sale.totalRevenue - sale.amountPaid).toLocaleString('en-US', { minimumFractionDigits: 0 })}` : ''}
+*Status:* ${sale.paymentStatus.toUpperCase()} ${statusEmoji}
+
+Thank you for your purchase! 🙏`;
+
+    // Get customer phone number from sale
+    // For now, we'll ask user to select contact or we can use customer phone if available
+    const encodedReceipt = encodeURIComponent(receipt);
+    const whatsappUrl = `https://wa.me/?text=${encodedReceipt}`;
+
+    try {
+      const supported = await Linking.canOpenURL(whatsappUrl);
+      if (supported) {
+        await Linking.openURL(whatsappUrl);
+      } else {
+        Alert.alert('Error', 'WhatsApp is not installed on this device');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open WhatsApp');
+      console.error('WhatsApp error:', error);
+    }
+  };
+
   const renderSale = ({ item }: { item: Sale }) => {
     const balance = item.totalRevenue - item.amountPaid;
-    
+    const currencySymbol = item.currency === 'DOP' ? 'RD$' : '$';
+
     return (
       <TouchableOpacity
         style={styles.saleCard}
@@ -121,14 +176,22 @@ export default function SalesScreen() {
         activeOpacity={0.7}
       >
         <View style={styles.saleHeader}>
-          <View>
+          <View style={styles.customerInfo}>
             <Text style={styles.customerName}>{item.customerName}</Text>
             <Text style={styles.saleDate}>
               {new Date(item.date).toLocaleDateString()} • {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.paymentStatus) }]}>
-            <Text style={styles.statusText}>{getStatusText(item.paymentStatus)}</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.whatsappButton}
+              onPress={() => sendReceiptViaWhatsApp(item)}
+            >
+              <Text style={styles.whatsappIcon}>📱</Text>
+            </TouchableOpacity>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.paymentStatus) }]}>
+              <Text style={styles.statusText}>{getStatusText(item.paymentStatus)}</Text>
+            </View>
           </View>
         </View>
 
@@ -136,9 +199,9 @@ export default function SalesScreen() {
           {item.products.map((product, index) => (
             <View key={index} style={styles.productLine}>
               <Text style={styles.productText}>
-                {product.quantity}× {product.brand} {product.name}
+                {product.quantity}× {product.brand} {product.name} {product.size}
               </Text>
-              <Text style={styles.productPrice}>${product.soldPrice * product.quantity}</Text>
+              <Text style={styles.productPrice}>{currencySymbol}{(product.soldPrice * product.quantity).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
             </View>
           ))}
         </View>
@@ -146,23 +209,23 @@ export default function SalesScreen() {
         <View style={styles.saleFooter}>
           <View style={styles.footerRow}>
             <Text style={styles.footerLabel}>{t('common.total')}:</Text>
-            <Text style={styles.footerValue}>${item.totalRevenue}</Text>
+            <Text style={styles.footerValue}>{currencySymbol}{item.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
           </View>
           {balance > 0 ? (
             <>
               <View style={styles.footerRow}>
                 <Text style={styles.footerLabel}>{t('sales.paid')}:</Text>
-                <Text style={[styles.footerValue, styles.paidValueText]}>${item.amountPaid}</Text>
+                <Text style={[styles.footerValue, styles.paidValueText]}>{currencySymbol}{item.amountPaid.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
               </View>
               <View style={[styles.footerRow, styles.balanceRow]}>
                 <Text style={styles.balanceLabel}>{t('sales.balance')}:</Text>
-                <Text style={styles.balanceValue}>${balance}</Text>
+                <Text style={styles.balanceValue}>{currencySymbol}{balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
               </View>
             </>
           ) : (
             <View style={styles.footerRow}>
               <Text style={styles.footerLabel}>{t('sales.profit')}:</Text>
-              <Text style={[styles.footerValue, styles.profitValue]}>+${item.profit}</Text>
+              <Text style={[styles.footerValue, styles.profitValue]}>+{currencySymbol}{item.profit.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</Text>
             </View>
           )}
         </View>
@@ -247,30 +310,33 @@ export default function SalesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   filtersContainer: {
     flexDirection: 'row',
     paddingHorizontal: 12,
     paddingVertical: 12,
     gap: 8,
-    backgroundColor: 'white',
+    backgroundColor: '#1a5490',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   filterChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 18,
     backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#e0cf80',
   },
   filterChipActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
+    borderColor: '#e0cf80',
   },
   filterChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
   },
   filterChipTextActive: {
     color: 'white',
@@ -279,21 +345,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   newSaleButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#e0cf80',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
   },
   newSaleButtonText: {
-    color: 'white',
+    color: '#1a5490',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -303,15 +369,17 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   saleCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#00ffff',
   },
   saleHeader: {
     flexDirection: 'row',
@@ -319,15 +387,39 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12,
   },
+  customerInfo: {
+    flex: 1,
+  },
   customerName: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 3,
   },
   saleDate: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  whatsappButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#25D366',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  whatsappIcon: {
+    fontSize: 20,
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -343,7 +435,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: 'rgba(26, 84, 144, 0.3)',
     marginBottom: 10,
   },
   productLine: {
@@ -354,7 +446,7 @@ const styles = StyleSheet.create({
   },
   productText: {
     fontSize: 14,
-    color: '#333',
+    color: '#1a5490',
     flex: 1,
     marginRight: 8,
   },
@@ -375,27 +467,27 @@ const styles = StyleSheet.create({
   },
   footerLabel: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
     flex: 1,
   },
   footerValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     minWidth: 70,
     textAlign: 'right',
   },
   profitValue: {
-    color: '#34C759',
+    color: '#1a5490',
   },
   paidValueText: {
-    color: '#34C759',
+    color: '#1a5490',
   },
   balanceRow: {
     marginTop: 6,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: 'rgba(26, 84, 144, 0.3)',
   },
   balanceLabel: {
     fontSize: 14,
@@ -417,7 +509,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 6,
   },
   emptySubtext: {

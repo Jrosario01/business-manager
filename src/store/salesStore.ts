@@ -3,6 +3,8 @@ import { supabase } from '../config/supabase';
 import { useCustomersStore } from './customersStore';
 import { useExchangeRateStore } from './exchangeRateStore';
 import { allocateProductFIFO, applyAllocations, AllocationResult } from '../utils/fifoAllocation';
+import { getTableName } from '../utils/getTableName';
+import { isDemoAccount } from '../utils/isDemoAccount';
 
 /**
  * Update shipment totals (revenue and profit) after a sale
@@ -27,7 +29,7 @@ async function updateShipmentTotals(
     for (const alloc of allocation.allocations) {
       // Get shipment_id from shipment_item
       const { data: shipmentItem } = await supabase
-        .from('shipment_items')
+        .from(getTableName('shipment_items'))
         .select('shipment_id')
         .eq('id', alloc.shipmentItemId)
         .single();
@@ -53,7 +55,7 @@ async function updateShipmentTotals(
   for (const [shipmentId, totals] of shipmentUpdates.entries()) {
     // Get current totals
     const { data: shipment } = await supabase
-      .from('shipments')
+      .from(getTableName('shipments'))
       .select('total_revenue, net_profit, total_cost')
       .eq('id', shipmentId)
       .single();
@@ -63,7 +65,7 @@ async function updateShipmentTotals(
       const newProfit = newRevenue - (shipment.total_cost || 0);
 
       await supabase
-        .from('shipments')
+        .from(getTableName('shipments'))
         .update({
           total_revenue: newRevenue,
           net_profit: newProfit,
@@ -145,13 +147,15 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   loadSales: async () => {
     set({ isLoading: true, error: null });
     try {
+      const saleItemsTableName = getTableName('sale_items');
+
       // Load sales with customer and sale items
       const { data: salesData, error: salesError } = await supabase
-        .from('sales')
+        .from(getTableName('sales'))
         .select(`
           *,
-          customer:customers(name),
-          sale_items(*)
+          customer:${getTableName('customers')}(name),
+          ${saleItemsTableName}(*)
         `)
         .order('sale_date', { ascending: false });
 
@@ -159,19 +163,20 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
       // Transform Supabase data to app format
       const transformedSales: Sale[] = await Promise.all((salesData || []).map(async (sale: any) => {
-        const saleItems = sale.sale_items || [];
+        // Access sale items using the correct table name (demo_sale_items or sale_items)
+        const saleItems = sale[saleItemsTableName] || sale.sale_items || [];
 
         // Get product details and cost from allocations
         const products: SaleProduct[] = await Promise.all(saleItems.map(async (item: any) => {
           const { data: product } = await supabase
-            .from('products')
+            .from(getTableName('products'))
             .select('brand, name, size')
             .eq('id', item.product_id)
             .single();
 
           // Get allocations for this sale item to calculate actual unit cost
           const { data: allocations } = await supabase
-            .from('sale_item_allocations')
+            .from(getTableName('sale_item_allocations'))
             .select('quantity, unit_cost')
             .eq('sale_item_id', item.id);
 
@@ -247,6 +252,11 @@ export const useSalesStore = create<SalesState>((set, get) => ({
   addSale: async (sale) => {
     set({ error: null });
     try {
+      // Demo account limits
+      if (isDemoAccount() && get().sales.length >= 30) {
+        throw new Error('Demo account limit: Maximum 30 sales');
+      }
+
       // 1. Find or create customer
       const { findOrCreateCustomer } = useCustomersStore.getState();
       const customer = await findOrCreateCustomer(sale.customerName);
@@ -265,7 +275,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       for (const product of sale.products) {
         // Find product in products table
         const { data: productData, error: productError } = await supabase
-          .from('products')
+          .from(getTableName('products'))
           .select('id')
           .eq('brand', product.brand)
           .eq('name', product.name)
@@ -309,7 +319,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
       // 4. Create sale record
       const { data: saleData, error: saleError } = await supabase
-        .from('sales')
+        .from(getTableName('sales'))
         .insert([{
           customer_id: customer.id,
           sale_date: sale.date,
@@ -331,7 +341,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
         // Create sale item with individual product payment
         const { data: saleItemData, error: itemError } = await supabase
-          .from('sale_items')
+          .from(getTableName('sale_items'))
           .insert([{
             sale_id: saleData.id,
             product_id: productId,
@@ -362,7 +372,6 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       await get().loadSales();
 
     } catch (error) {
-      console.error('Error adding sale:', error);
       set({ error: (error as Error).message });
       throw error; // Re-throw to show error to user
     }
@@ -378,7 +387,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
       if (saleUpdate.products) {
         // Get sale items from database
         const { data: saleItems } = await supabase
-          .from('sale_items')
+          .from(getTableName('sale_items'))
           .select('id, product_id')
           .eq('sale_id', id);
 
@@ -390,7 +399,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
 
             if (saleItem && product.amountPaid !== undefined) {
               await supabase
-                .from('sale_items')
+                .from(getTableName('sale_items'))
                 .update({ amount_paid: product.amountPaid })
                 .eq('id', saleItem.id);
             }
@@ -406,7 +415,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
           saleUpdate.amountPaid > 0 ? 'partial' : 'layaway';
 
         const { error } = await supabase
-          .from('sales')
+          .from(getTableName('sales'))
           .update({
             amount_paid: saleUpdate.amountPaid,
             outstanding_balance: outstandingBalance,
@@ -429,7 +438,7 @@ export const useSalesStore = create<SalesState>((set, get) => ({
     set({ error: null });
     try {
       const { error } = await supabase
-        .from('sales')
+        .from(getTableName('sales'))
         .delete()
         .eq('id', id);
 

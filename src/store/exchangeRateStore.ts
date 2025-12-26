@@ -1,14 +1,23 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../config/supabase';
 
 const CURRENCYAPI_KEY = 'cur_live_O4zQWzS1GCVAWEampaYbPd7xO05a8j3rGukdNaHY'; // User will need to add their API key
 const CACHE_KEY = '@exchange_rate_cache';
-const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+const LAST_FETCH_KEY = '@last_rate_fetch';
+const FETCH_INTERVAL = 12 * 60 * 60 * 1000; // 12 hours in milliseconds (twice daily)
 
 interface ExchangeRateCache {
   rate: number;
   timestamp: number;
   isManual: boolean;
+}
+
+interface ExchangeRateHistory {
+  id: string;
+  rate: number;
+  fetched_at: string;
+  source: string;
 }
 
 interface ExchangeRateState {
@@ -18,14 +27,17 @@ interface ExchangeRateState {
   isManual: boolean;
   isLoading: boolean;
   error: string | null;
+  history: ExchangeRateHistory[];
 
   // Actions
   fetchRate: () => Promise<void>;
   setManualRate: (rate: number) => Promise<void>;
   enableAutoFetch: () => Promise<void>;
   loadCachedRate: () => Promise<void>;
+  loadHistoricRates: (days?: number) => Promise<void>;
   convertToDop: (usd: number) => number;
   convertToUsd: (dop: number) => number;
+  shouldFetchNewRate: () => Promise<boolean>;
 }
 
 export const useExchangeRateStore = create<ExchangeRateState>((set, get) => ({
@@ -35,42 +47,100 @@ export const useExchangeRateStore = create<ExchangeRateState>((set, get) => ({
   isManual: false,
   isLoading: false,
   error: null,
+  history: [],
 
-  // Load cached rate from AsyncStorage
-  loadCachedRate: async () => {
+  // Check if we should fetch a new rate (every 12 hours)
+  shouldFetchNewRate: async () => {
     try {
-      console.log('Loading cached exchange rate...');
-      const cached = await AsyncStorage.getItem(CACHE_KEY);
-
-      if (cached) {
-        const data: ExchangeRateCache = JSON.parse(cached);
-        const now = Date.now();
-        const age = now - data.timestamp;
-
-        console.log(`Found cached rate: ${data.rate}, age: ${Math.round(age / 1000 / 60)} minutes`);
-
-        // Use cached rate if it's fresh or manually set
-        if (data.isManual || age < CACHE_DURATION) {
-          set({
-            usdToDop: data.rate,
-            lastUpdated: new Date(data.timestamp),
-            isManual: data.isManual,
-          });
-          console.log(`Using cached rate: 1 USD = ${data.rate} DOP`);
-          return;
-        }
-
-        console.log('Cache expired, fetching fresh rate...');
-      } else {
-        console.log('No cache found, fetching fresh rate...');
+      const lastFetchStr = await AsyncStorage.getItem(LAST_FETCH_KEY);
+      if (!lastFetchStr) {
+        console.log('No last fetch time found, should fetch');
+        return true;
       }
 
-      // If no valid cache, fetch fresh rate
-      await get().fetchRate();
+      const lastFetch = parseInt(lastFetchStr);
+      const now = Date.now();
+      const timeSinceLastFetch = now - lastFetch;
+      const hoursSinceLastFetch = timeSinceLastFetch / (60 * 60 * 1000);
+
+      console.log(`Last fetch was ${hoursSinceLastFetch.toFixed(1)} hours ago`);
+
+      const shouldFetch = timeSinceLastFetch >= FETCH_INTERVAL;
+      console.log(`Should fetch new rate: ${shouldFetch}`);
+
+      return shouldFetch;
+    } catch (error) {
+      console.error('Error checking last fetch time:', error);
+      return true;
+    }
+  },
+
+  // Load cached rate from database or AsyncStorage
+  loadCachedRate: async () => {
+    try {
+      console.log('Loading exchange rate...');
+
+      // Check if we should fetch a new rate based on last fetch time
+      const shouldFetch = await get().shouldFetchNewRate();
+
+      // First, try to load the latest rate from database
+      const { data: latestRate, error } = await supabase
+        .from('exchange_rates')
+        .select('*')
+        .order('fetched_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!error && latestRate) {
+        console.log(`Found latest rate from database: ${latestRate.rate}`);
+        set({
+          usdToDop: latestRate.rate,
+          lastUpdated: new Date(latestRate.fetched_at),
+          isManual: false,
+        });
+
+        // Only fetch if 12 hours have passed
+        if (shouldFetch) {
+          console.log('12 hours passed since last fetch, fetching new rate in background...');
+          // Fetch in background without awaiting
+          get().fetchRate().catch(err => console.error('Background fetch error:', err));
+        } else {
+          console.log('Using database rate (last fetch was less than 12 hours ago)');
+        }
+        return;
+      }
+
+      console.log('No rate in database, checking AsyncStorage...');
+
+      // Fallback to AsyncStorage if database has no rates
+      const cached = await AsyncStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const data: ExchangeRateCache = JSON.parse(cached);
+        set({
+          usdToDop: data.rate,
+          lastUpdated: new Date(data.timestamp),
+          isManual: data.isManual,
+        });
+        console.log(`Using cached rate: 1 USD = ${data.rate} DOP`);
+
+        // Only fetch if needed
+        if (shouldFetch) {
+          console.log('Fetching fresh rate...');
+          await get().fetchRate();
+        }
+      } else {
+        // No cached data at all, fetch immediately
+        console.log('No cached data found, fetching fresh rate...');
+        await get().fetchRate();
+      }
     } catch (error) {
       console.error('Error loading cached rate:', error);
-      // Fetch fresh rate even if cache loading failed
-      await get().fetchRate();
+      // Only fetch if we don't have a rate already
+      const { usdToDop } = get();
+      if (usdToDop === 62.25) {
+        // Still using default, try to fetch
+        await get().fetchRate();
+      }
     }
   },
 
@@ -118,9 +188,33 @@ export const useExchangeRateStore = create<ExchangeRateState>((set, get) => ({
         isManual: false,
       };
 
-      // Save to cache
+      // Save to cache (for backwards compatibility)
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+      // Save last fetch timestamp
+      await AsyncStorage.setItem(LAST_FETCH_KEY, now.toString());
       console.log('Exchange rate cached successfully');
+
+      // Save to database
+      try {
+        const { data: insertedData, error: dbError } = await supabase
+          .from('exchange_rates')
+          .insert({
+            rate,
+            fetched_at: new Date(now).toISOString(),
+            source: 'currencyapi',
+          })
+          .select();
+
+        if (dbError) {
+          console.error('❌ ERROR saving rate to database:', dbError);
+          console.error('Error details:', JSON.stringify(dbError, null, 2));
+        } else {
+          console.log('✅ Exchange rate saved to database successfully');
+          console.log('Inserted data:', insertedData);
+        }
+      } catch (dbErr) {
+        console.error('❌ Database save error (catch):', dbErr);
+      }
 
       set({
         usdToDop: rate,
@@ -179,6 +273,36 @@ export const useExchangeRateStore = create<ExchangeRateState>((set, get) => ({
   enableAutoFetch: async () => {
     set({ isManual: false });
     await get().fetchRate();
+  },
+
+  // Load historic exchange rates from database
+  loadHistoricRates: async (days: number = 30) => {
+    try {
+      const daysAgo = new Date();
+      daysAgo.setDate(daysAgo.getDate() - days);
+
+      console.log(`Loading historic rates from last ${days} days...`);
+
+      const { data, error } = await supabase
+        .from('exchange_rates')
+        .select('*')
+        .gte('fetched_at', daysAgo.toISOString())
+        .order('fetched_at', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error loading historic rates:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        return;
+      }
+
+      set({ history: data || [] });
+      console.log(`✅ Loaded ${data?.length || 0} historic exchange rates`);
+      if (data && data.length > 0) {
+        console.log('Most recent rate:', data[0]);
+      }
+    } catch (error) {
+      console.error('❌ Error loading historic rates (catch):', error);
+    }
   },
 
   // Convert USD to DOP

@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../config/supabase';
+import { getTableName } from '../utils/getTableName';
+import { isDemoAccount } from '../utils/isDemoAccount';
 
 // Supabase shipment type (matches database schema)
 export interface SupabaseShipment {
@@ -87,6 +89,9 @@ interface ShipmentsState {
   getAvailableInventory: (brand: string, name: string, size: string) => Promise<any[]>;
   getConsolidatedInventory: () => Promise<any[]>;
 
+  // Reset store
+  reset: () => void;
+
   // Filters
   searchShipments: (query: string) => ShipmentWithItems[];
   getShipmentsByStatus: (status: string) => ShipmentWithItems[];
@@ -103,13 +108,17 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
   loadShipments: async () => {
     set({ isLoading: true, error: null });
     try {
+      const tableName = getTableName('shipments');
+      console.log('📦 Loading shipments from table:', tableName);
+      console.log('📦 Is demo account:', isDemoAccount());
+
       const { data: shipmentsData, error: shipmentsError } = await supabase
-        .from('shipments')
+        .from(tableName)
         .select(`
           *,
-          shipment_items:shipment_items (
+          shipment_items:${getTableName('shipment_items')} (
             *,
-            product:products (
+            product:${getTableName('products')} (
               id,
               sku,
               brand,
@@ -123,7 +132,12 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
         `)
         .order('created_at', { ascending: false });
 
-      if (shipmentsError) throw shipmentsError;
+      console.log('📦 Loaded shipments:', shipmentsData?.length || 0);
+
+      if (shipmentsError) {
+        console.error('📦 Error loading shipments:', shipmentsError);
+        throw shipmentsError;
+      }
 
       // Transform data to include items
       const shipments: ShipmentWithItems[] = (shipmentsData || []).map(shipment => ({
@@ -141,12 +155,12 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
   getShipmentById: async (id: string) => {
     try {
       const { data, error } = await supabase
-        .from('shipments')
+        .from(getTableName('shipments'))
         .select(`
           *,
-          shipment_items:shipment_items (
+          shipment_items:${getTableName('shipment_items')} (
             *,
-            product:products (
+            product:${getTableName('products')} (
               id,
               sku,
               brand,
@@ -177,9 +191,14 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
   addShipment: async (shipment, items) => {
     set({ error: null });
     try {
+      // Demo account limits
+      if (isDemoAccount() && get().shipments.length >= 5) {
+        throw new Error('Demo account limit: Maximum 5 shipments');
+      }
+
       // Insert shipment
       const { data: newShipment, error: shipmentError } = await supabase
-        .from('shipments')
+        .from(getTableName('shipments'))
         .insert([shipment])
         .select()
         .single();
@@ -194,11 +213,11 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
         }));
 
         const { data: newItems, error: itemsError } = await supabase
-          .from('shipment_items')
+          .from(getTableName('shipment_items'))
           .insert(itemsToInsert)
           .select(`
             *,
-            product:products (
+            product:${getTableName('products')} (
               id,
               sku,
               brand,
@@ -239,7 +258,7 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
     set({ error: null });
     try {
       const { error } = await supabase
-        .from('shipments')
+        .from(getTableName('shipments'))
         .update(shipment)
         .eq('id', id);
 
@@ -259,7 +278,7 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
     set({ error: null });
     try {
       const { error } = await supabase
-        .from('shipments')
+        .from(getTableName('shipments'))
         .delete()
         .eq('id', id);
 
@@ -277,11 +296,11 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
     set({ error: null });
     try {
       const { data: newItem, error: itemError } = await supabase
-        .from('shipment_items')
+        .from(getTableName('shipment_items'))
         .insert([{ ...item, shipment_id: shipmentId }])
         .select(`
           *,
-          product:products (
+          product:${getTableName('products')} (
             id,
             sku,
             brand,
@@ -312,7 +331,7 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
     set({ error: null });
     try {
       const { error } = await supabase
-        .from('shipment_items')
+        .from(getTableName('shipment_items'))
         .update(item)
         .eq('id', id);
 
@@ -336,7 +355,7 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
     set({ error: null });
     try {
       const { error } = await supabase
-        .from('shipment_items')
+        .from(getTableName('shipment_items'))
         .delete()
         .eq('id', id);
 
@@ -356,7 +375,10 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
 
   getAvailableInventory: async (brand: string, name: string, size: string) => {
     try {
-      const { data, error } = await supabase.rpc('get_available_inventory', {
+      // Use demo RPC function for demo accounts
+      const rpcFunction = isDemoAccount() ? 'demo_get_available_inventory' : 'get_available_inventory';
+
+      const { data, error } = await supabase.rpc(rpcFunction, {
         p_brand: brand,
         p_name: name,
         p_size: size,
@@ -373,7 +395,7 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
   getConsolidatedInventory: async () => {
     try {
       const { data, error } = await supabase
-        .from('consolidated_inventory')
+        .from(getTableName('consolidated_inventory'))
         .select('*')
         .order('brand', { ascending: true })
         .order('name', { ascending: true });
@@ -407,7 +429,10 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
   // Get sales allocations for a shipment (for accurate revenue/payment calculations)
   getShipmentSalesAllocations: async (shipmentId: string) => {
     try {
-      const { data, error } = await supabase.rpc('get_shipment_sales_with_allocations', {
+      // Use demo RPC function for demo accounts
+      const rpcFunction = isDemoAccount() ? 'demo_get_shipment_sales_with_allocations' : 'get_shipment_sales_with_allocations';
+
+      const { data, error } = await supabase.rpc(rpcFunction, {
         p_shipment_id: shipmentId
       });
 
@@ -417,5 +442,14 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
       console.error('Error getting shipment allocations:', error);
       return [];
     }
+  },
+
+  // Reset store to initial state
+  reset: () => {
+    set({
+      shipments: [],
+      isLoading: false,
+      error: null,
+    });
   },
 }));

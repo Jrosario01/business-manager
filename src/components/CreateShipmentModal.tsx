@@ -9,6 +9,10 @@ import {
   TouchableOpacity,
   Alert,
   Image,
+  Platform,
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
@@ -49,6 +53,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
   const [showSuggestions, setShowSuggestions] = useState<number>(-1);
   const [isAddProductModalVisible, setIsAddProductModalVisible] = useState(false);
   const [pendingProductIndex, setPendingProductIndex] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Calculate shipping per unit in real-time
   const calculateShippingPerUnit = () => {
@@ -198,7 +203,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
     return calculateProductsCost() + shipping;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Check if all products are selected from catalog
     const hasInvalidProducts = products.some(p => !p.catalogProductId);
     if (hasInvalidProducts) {
@@ -217,26 +222,36 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
       return;
     }
 
-    const shippingPerUnit = calculateShippingPerUnit();
+    setIsSaving(true);
 
-    const shipmentData = {
-      products: products.map(p => ({
-        brand: p.brand.trim(),
-        name: p.name.trim(),
-        size: p.size,
-        unitCost: parseFloat(p.unitCost),
-        quantity: parseInt(p.quantity),
-        shippingPerUnit: shippingPerUnit,
-        catalogProductId: p.catalogProductId,
-      })),
-      totalShippingCost: parseFloat(totalShippingCost),
-      totalCost: calculateTotalCost(),
-      notes: notes.trim(),
-      status: 'preparing',
-    };
+    try {
+      const shippingPerUnit = calculateShippingPerUnit();
 
-    onSubmit(shipmentData);
-    resetForm();
+      const shipmentData = {
+        products: products.map(p => ({
+          brand: p.brand.trim(),
+          name: p.name.trim(),
+          size: p.size,
+          unitCost: parseFloat(p.unitCost),
+          quantity: parseInt(p.quantity),
+          shippingPerUnit: shippingPerUnit,
+          catalogProductId: p.catalogProductId,
+        })),
+        totalShippingCost: parseFloat(totalShippingCost),
+        totalCost: calculateTotalCost(),
+        notes: notes.trim(),
+        status: 'preparing',
+      };
+
+      await onSubmit(shipmentData);
+      Alert.alert('Success', 'Shipment created successfully!');
+      resetForm();
+    } catch (error) {
+      console.error('Error creating shipment:', error);
+      Alert.alert('Error', 'Failed to create shipment. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const resetForm = () => {
@@ -289,15 +304,17 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
         animationType="slide"
         transparent={false}
         onRequestClose={handleCancel}
+        presentationStyle="fullScreen"
+        statusBarTranslucent={true}
       >
         <View style={styles.container}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
+            <TouchableOpacity onPress={handleCancel} disabled={isSaving}>
+              <Text style={[styles.cancelButton, isSaving && styles.disabledButton]}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <Text style={styles.title}>{t('modals.createShipment.newShipment')}</Text>
-            <TouchableOpacity onPress={handleSubmit}>
-              <Text style={styles.saveButton}>{t('common.save')}</Text>
+            <TouchableOpacity onPress={handleSubmit} disabled={isSaving}>
+              <Text style={[styles.saveButton, isSaving && styles.disabledButton]}>{t('common.save')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -551,6 +568,16 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
 
             <View style={styles.bottomSpacer} />
           </ScrollView>
+
+          {/* Full Screen Loading Overlay */}
+          {isSaving && (
+            <View style={styles.loadingOverlay}>
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#00ffff" />
+                <Text style={styles.loadingText}>Creating shipment...</Text>
+              </View>
+            </View>
+          )}
         </View>
       </Modal>
 
@@ -568,34 +595,50 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
   );
 }
 
+const { height: screenHeight } = Dimensions.get('window');
+const getHeaderPaddingTop = () => {
+  if (Platform.OS === 'android') {
+    const statusBarHeight = StatusBar.currentHeight || 0;
+    return statusBarHeight + (screenHeight > 800 ? 30 : 25);
+  } else {
+    return screenHeight > 800 ? 60 : 50;
+  }
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
+    paddingBottom: 0,
+    marginBottom: 0,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'white',
+    padding: 16,
+    paddingTop: getHeaderPaddingTop(),
+    paddingBottom: 20,
+    backgroundColor: '#1a5490',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   cancelButton: {
     fontSize: 15,
     color: '#FF3B30',
     fontWeight: '600',
   },
+  disabledButton: {
+    opacity: 0.5,
+  },
   title: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#333',
+    color: 'white',
   },
   saveButton: {
     fontSize: 15,
-    color: '#007AFF',
+    color: '#00ffff',
     fontWeight: '600',
   },
   content: {
@@ -605,12 +648,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#e0cf80',
     marginBottom: 8,
     marginTop: 4,
   },
   productCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
@@ -621,7 +664,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
@@ -640,7 +683,7 @@ const styles = StyleSheet.create({
   productNumber: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   removeButton: {
     fontSize: 13,
@@ -650,7 +693,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 6,
     marginTop: 8,
   },
@@ -664,10 +707,10 @@ const styles = StyleSheet.create({
   },
   suggestionsContainer: {
     marginTop: 6,
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: '#1a5490',
     maxHeight: 250,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -686,12 +729,12 @@ const styles = StyleSheet.create({
   suggestionName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 4,
   },
   suggestionDetails: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
   },
   addNewProductButton: {
     padding: 12,
@@ -776,7 +819,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   editProductButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -799,8 +842,8 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
   },
   sizeChipActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#1a5490',
+    borderColor: '#1a5490',
   },
   sizeChipText: {
     fontSize: 12,
@@ -862,12 +905,12 @@ const styles = StyleSheet.create({
   },
   costLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#1a5490',
   },
   costValue: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
   },
   productTotalRow: {
     marginTop: 6,
@@ -878,58 +921,86 @@ const styles = StyleSheet.create({
   productTotalLabel: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
   },
   productTotalValue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   addProductButton: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#007AFF',
+    borderColor: '#1a5490',
     borderStyle: 'dashed',
   },
   addProductButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   costSummary: {
     marginTop: 4,
   },
   summaryLabel: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
     fontWeight: '500',
   },
   summaryValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
   },
   grandTotalRow: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 2,
-    borderTopColor: '#007AFF',
+    borderTopColor: '#1a5490',
   },
   grandTotalLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
   },
   grandTotalValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   bottomSpacer: {
     height: 20,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContainer: {
+    backgroundColor: '#1a5490',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    color: '#00ffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
   },
 });

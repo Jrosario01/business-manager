@@ -137,7 +137,10 @@
     "purchases": "Purchases",
     "wishlist": "Wishlist",
     "interestedIn": "Interested In",
-    "lastPurchase": "Last purchase"
+    "lastPurchase": "Last purchase",
+    "noOneOwes": "No one owes money",
+    "noWishlists": "No wishlists yet",
+    "allCaughtUp": "You're all caught up!"
   },
   "shipments": {
     "title": "Shipments",

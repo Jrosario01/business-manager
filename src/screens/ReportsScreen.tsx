@@ -259,13 +259,16 @@ export default function ReportsScreen() {
       const shipment = shipmentMetrics.find(s => s.id === shipmentId);
       if (!shipment) return;
 
+      const pdfFilename = `${shipment.name.replace(/[^a-z0-9]/gi, '_')}_Report`;
+
       const htmlContent = `
         <html>
           <head>
+            <title>${pdfFilename}</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
             <style>
               body { font-family: Arial, sans-serif; padding: 20px; }
-              h1 { color: #007AFF; margin-bottom: 10px; }
+              h1 { color: #1a5490; margin-bottom: 10px; }
               .metric-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
               .metric-label { font-weight: bold; color: #666; }
               .metric-value { color: #333; font-size: 16px; }
@@ -315,6 +318,7 @@ export default function ReportsScreen() {
         </html>
       `;
 
+      // Print/Save PDF with custom filename
       await Print.printAsync({
         html: htmlContent,
       });
@@ -341,8 +345,8 @@ export default function ReportsScreen() {
               <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
               <style>
                 body { font-family: Arial, sans-serif; padding: 20px; }
-                h1 { color: #007AFF; margin-bottom: 10px; }
-                h2 { color: #333; margin-top: 20px; border-bottom: 2px solid #007AFF; padding-bottom: 5px; }
+                h1 { color: #1a5490; margin-bottom: 10px; }
+                h2 { color: #333; margin-top: 20px; border-bottom: 2px solid #1a5490; padding-bottom: 5px; }
                 .metric-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
                 .metric-label { font-weight: bold; color: #666; }
                 .metric-value { color: #333; font-size: 18px; }
@@ -391,7 +395,7 @@ export default function ReportsScreen() {
         // Shipment report
         const shipmentRows = shipmentMetrics.map(shipment => `
           <div style="margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-            <h3 style="color: #007AFF; margin-top: 0;">${shipment.name}</h3>
+            <h3 style="color: #1a5490; margin-top: 0;">${shipment.name}</h3>
             <div class="metric-row">
               <span class="metric-label">${t('reports.initialInvestment')}:</span>
               <span class="metric-value">${formatPesos(shipment.totalCost)}</span>
@@ -429,7 +433,7 @@ export default function ReportsScreen() {
               <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
               <style>
                 body { font-family: Arial, sans-serif; padding: 20px; }
-                h1 { color: #007AFF; margin-bottom: 10px; }
+                h1 { color: #1a5490; margin-bottom: 10px; }
                 h2 { color: #333; margin-top: 20px; }
                 .metric-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
                 .metric-label { font-weight: bold; color: #666; }
@@ -722,7 +726,7 @@ export default function ReportsScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#1a5490" />
         <Text style={styles.loadingText}>{t('common.loading')}</Text>
       </View>
     );
@@ -759,7 +763,7 @@ export default function ReportsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   centerContent: {
     justifyContent: 'center',
@@ -772,27 +776,33 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: 'white',
+    backgroundColor: '#1a5490',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   tab: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 10,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    borderRadius: 8,
+    backgroundColor: '#1a5490',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: '#007AFF',
+    backgroundColor: '#1a5490',
+    borderColor: '#e0cf80',
   },
   tabText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: 'white',
   },
   tabTextActive: {
-    color: '#007AFF',
+    color: '#e0cf80',
   },
   content: {
     flex: 1,
@@ -808,14 +818,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   filterChipActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#1a5490',
+    borderColor: '#e0cf80',
   },
   filterChipText: {
     fontSize: 14,
@@ -835,7 +845,7 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -860,7 +870,7 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#1a5490',
     fontWeight: '600',
     marginBottom: 8,
     textTransform: 'uppercase',
@@ -894,16 +904,21 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#e0cf80',
     marginBottom: 8,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 15,
+    color: '#e0cf80',
+    fontWeight: 'bold',
     marginBottom: 12,
+    backgroundColor: '#1a5490',
+    padding: 8,
+    borderRadius: 6,
+    textAlign: 'center',
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -924,7 +939,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 14,
     borderTopWidth: 2,
-    borderTopColor: '#007AFF',
+    borderTopColor: '#1a5490',
   },
   breakdownLabel: {
     fontSize: 14,
@@ -946,7 +961,7 @@ const styles = StyleSheet.create({
     color: '#2E7D32',
   },
   shipmentCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -965,12 +980,12 @@ const styles = StyleSheet.create({
   shipmentName: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 4,
   },
   shipmentDate: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -998,12 +1013,12 @@ const styles = StyleSheet.create({
   },
   shipmentMetricLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#1a5490',
   },
   shipmentMetricValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
   },
   divider: {
     height: 1,
@@ -1012,7 +1027,7 @@ const styles = StyleSheet.create({
   },
   exportIcon: {
     padding: 8,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1024,7 +1039,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   exportAllButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -1043,12 +1058,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   bottomSpacer: {
-    height: 20,
+    height: 60,
   },
   emptyContainer: {
     padding: 40,
     alignItems: 'center',
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     marginTop: 20,
   },
@@ -1077,7 +1092,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1093,17 +1108,17 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 2,
   },
   productSize: {
     fontSize: 12,
-    color: '#666',
+    color: '#1a5490',
   },
   productRevenue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   quickStatRow: {
     flexDirection: 'row',
@@ -1115,12 +1130,12 @@ const styles = StyleSheet.create({
   },
   quickStatLabel: {
     fontSize: 14,
-    color: '#666',
+    color: '#1a5490',
     fontWeight: '500',
   },
   quickStatValue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
   },
 });

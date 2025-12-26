@@ -5,7 +5,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '../i18n/i18n';
 
-
 // Import screens
 import InventoryScreen from '../screens/InventoryScreen';
 import ShipmentsScreen from '../screens/ShipmentsScreen';
@@ -14,7 +13,6 @@ import CustomersScreen from '../screens/CustomersScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import CatalogScreen from '../screens/CatalogScreen';
 import CurrencyScreen from '../screens/CurrencyScreen';
-
 
 // Import auth store for logout
 import { useAuthStore } from '../store/authStore';
@@ -42,32 +40,45 @@ function CustomDrawerContent(props: any) {
   };
 
   return (
-    <DrawerContentScrollView {...props}>
-      <View style={styles.drawerHeader}>
-        <Text style={styles.appName}>Business Manager</Text>
-        <Text style={styles.appSubtitle}>Perfume Business</Text>
-      </View>
-      <DrawerItemList {...props} />
+    <View style={{ flex: 1 }}>
+      <DrawerContentScrollView {...props}>
+        {/* Header */}
+        <View style={styles.drawerHeader}>
+          <Text style={styles.appName}>G & J Essence</Text>
+          <Text style={styles.appSubtitle}>Perfume Business</Text>
+        </View>
 
-      {/* Language Selector */}
-      <DrawerItem
-        label={() => (
-          <View style={styles.languageContainer}>
-            <Text style={styles.languageLabel}>🌐 {t('drawer.language')}</Text>
-            <Text style={styles.currentLanguage}>{getCurrentLanguageLabel()}</Text>
-          </View>
-        )}
-        onPress={() => setShowLanguageModal(true)}
-        style={styles.languageItem}
-      />
+        {/* Main menu items */}
+        <DrawerItemList {...props} />
 
-      {/* Logout */}
-      <DrawerItem
-        label={t('auth.signOut')}
-        onPress={handleLogout}
-        labelStyle={styles.logoutLabel}
-        style={styles.logoutItem}
-      />
+        {/* Bottom section - Language & Logout */}
+        <View style={styles.bottomSection}>
+          {/* Language Selector */}
+          <DrawerItem
+            label={() => (
+              <View style={styles.bottomItemContent}>
+                <Text style={styles.bottomItemIcon}>🌐</Text>
+                <Text style={styles.bottomItemLabel}>{t('drawer.language')}</Text>
+                <Text style={styles.currentLanguage}>{getCurrentLanguageLabel()}</Text>
+              </View>
+            )}
+            onPress={() => setShowLanguageModal(true)}
+            style={styles.bottomItem}
+          />
+
+          {/* Logout */}
+          <DrawerItem
+            label={() => (
+              <View style={styles.bottomItemContent}>
+                <Text style={styles.bottomItemIcon}>🚪</Text>
+                <Text style={styles.logoutLabel}>{t('auth.signOut')}</Text>
+              </View>
+            )}
+            onPress={handleLogout}
+            style={styles.bottomItem}
+          />
+        </View>
+      </DrawerContentScrollView>
 
       {/* Language Selection Modal */}
       <Modal
@@ -115,7 +126,7 @@ function CustomDrawerContent(props: any) {
           </View>
         </TouchableOpacity>
       </Modal>
-    </DrawerContentScrollView>
+    </View>
   );
 }
 
@@ -128,17 +139,23 @@ export default function DrawerNavigator() {
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
         drawerStyle: {
-          backgroundColor: '#fff',
+          backgroundColor: '#1a5490',
           width: 280,
         },
         drawerLabelStyle: {
-          fontSize: 16,
-          fontWeight: '500',
+          fontSize: 18,
+          fontWeight: '600',
+          paddingLeft: 10,
         },
-        drawerActiveTintColor: '#007AFF',
-        drawerInactiveTintColor: '#666',
+        drawerActiveTintColor: '#e0cf80',
+        drawerInactiveTintColor: '#E5E5EA',
+        drawerActiveBackgroundColor: '#2c6bb3',
+        drawerItemStyle: {
+          borderRadius: 8,
+          marginVertical: 2,
+        },
         headerStyle: {
-          backgroundColor: '#007AFF',
+          backgroundColor: '#1a5490',
         },
         headerTintColor: '#fff',
         headerTitleStyle: {
@@ -162,7 +179,6 @@ export default function DrawerNavigator() {
           title: t('catalog.title'),
         }}
       />
-
       <Drawer.Screen
         name="Shipments"
         component={ShipmentsScreen}
@@ -209,50 +225,61 @@ export default function DrawerNavigator() {
 
 const styles = StyleSheet.create({
   drawerHeader: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-    marginBottom: 10,
+    padding: 24,
+    backgroundColor: '#e0cf80',
+    borderBottomWidth: 2,
+    borderBottomColor: '#1a5490',
+    marginBottom: 16,
+    alignItems: 'center',
   },
   appName: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
+    letterSpacing: 1,
+    fontFamily: 'System',
   },
   appSubtitle: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 13,
+    color: '#5A5A5A',
     marginTop: 4,
+    fontWeight: '500',
   },
-  languageItem: {
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
+  bottomSection: {
+    borderTopWidth: 2,
+    borderTopColor: '#e0cf80',
+    paddingTop: 8,
+    marginTop: 16,
+    paddingBottom: 8,
   },
-  languageContainer: {
+  bottomItem: {
+    marginVertical: 0,
+  },
+  bottomItemContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
     flex: 1,
   },
-  languageLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#666',
+  bottomItemIcon: {
+    fontSize: 20,
+  },
+  bottomItemLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#E5E5EA',
+    flex: 1,
   },
   currentLanguage: {
     fontSize: 13,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  logoutItem: {
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
+    color: '#e0cf80',
+    fontWeight: '600',
   },
   logoutLabel: {
-    color: '#FF3B30',
+    fontSize: 15,
+    color: '#FF6B6B',
     fontWeight: '600',
+    flex: 1,
   },
   modalOverlay: {
     flex: 1,
@@ -261,16 +288,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    width: '80%',
-    maxWidth: 320,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 340,
+    borderWidth: 2,
+    borderColor: '#e0cf80',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -279,33 +308,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#F5F5F5',
-    marginBottom: 10,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   languageOptionActive: {
-    backgroundColor: '#E3F2FD',
-    borderWidth: 2,
-    borderColor: '#007AFF',
+    backgroundColor: '#e0cf80',
+    borderColor: '#1a5490',
   },
   languageOptionText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
   },
   checkmark: {
     fontSize: 20,
-    color: '#007AFF',
+    color: '#1a5490',
     fontWeight: 'bold',
   },
   modalCancelButton: {
-    marginTop: 10,
+    marginTop: 8,
     padding: 14,
     alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
   },
   modalCancelText: {
     fontSize: 16,
     color: '#666',
-    fontWeight: '500',
+    fontWeight: '600',
   },
 });

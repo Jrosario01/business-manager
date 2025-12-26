@@ -10,33 +10,56 @@ import {
   Modal,
   ScrollView,
   Image,
+  RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import CreateShipmentModal from '../components/CreateShipmentModal';
 import DualCurrencyText from '../components/DualCurrencyText';
 import { useShipmentsStore, ShipmentWithItems } from '../store/shipmentsStore';
 import { useExchangeRateStore } from '../store/exchangeRateStore';
+import { useAuthStore } from '../store/authStore';
 
 export default function ShipmentsScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<any>();
+  const { user } = useAuthStore();
   const { shipments, loadShipments, isLoading } = useShipmentsStore();
   const { usdToDop } = useExchangeRateStore();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState<ShipmentWithItems | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadShipments();
-  }, []);
+  // Reload shipments whenever screen comes into focus AND user is loaded
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        console.log('📦 ShipmentsScreen focused - loading shipments for user:', user.email);
+        loadShipments();
+      } else {
+        console.log('📦 ShipmentsScreen focused - waiting for user to load');
+      }
+      return () => {
+        console.log('📦 ShipmentsScreen unfocused');
+      };
+    }, [user])
+  );
+
+  // Pull-to-refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadShipments();
+    setRefreshing(false);
+  };
 
   const handleCreateShipment = async (shipmentData: any) => {
     try {
-      // Generate shipment number (format: SHIP-YYYYMMDD-XXX)
+      // Generate shipment name (format: DDMMYYYY, e.g., 25122024)
       const date = new Date();
-      const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
-      const shipmentCount = shipments.length + 1;
-      const shipmentNumber = `SHIP-${dateStr}-${shipmentCount.toString().padStart(3, '0')}`;
+      const day = date.getDate();
+      const month = date.getMonth() + 1; // Months are 0-indexed
+      const year = date.getFullYear();
+      const shipmentNumber = `${day}${month}${year}`;
 
       // Calculate totals
       const productsCost = shipmentData.products.reduce((sum: number, p: any) =>
@@ -123,7 +146,7 @@ export default function ShipmentsScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#1a5490" />
         <Text style={styles.loadingText}>{t('shipments.loadingShipments')}</Text>
       </View>
     );
@@ -158,6 +181,14 @@ export default function ShipmentsScreen() {
         renderItem={renderShipmentCard}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#1a5490"
+            colors={['#1a5490']}
+          />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>📦</Text>
@@ -185,7 +216,8 @@ export default function ShipmentsScreen() {
       <Modal
         visible={selectedShipment !== null}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
+        statusBarTranslucent={true}
         onRequestClose={() => setSelectedShipment(null)}
       >
         {selectedShipment && (
@@ -319,20 +351,22 @@ function ShipmentDetailsView({ shipment }: { shipment: ShipmentWithItems }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#1a5490',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: 'white',
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: '#1a5490',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   closeButton: {
     fontSize: 16,
@@ -342,17 +376,17 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: 'white',
   },
   modalContent: {
     flex: 1,
-    padding: 16,
+    padding: 12,
   },
   detailsContainer: {
     paddingBottom: 40,
   },
   detailCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -363,32 +397,33 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   detailShipmentNumber: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 4,
   },
   detailDate: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: '#1a5490',
+    fontWeight: '600',
     marginBottom: 8,
   },
   exchangeRateText: {
-    fontSize: 13,
-    color: '#007AFF',
+    fontSize: 14,
+    color: '#1a5490',
     fontWeight: '600',
     marginBottom: 8,
   },
   detailNotes: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 15,
+    color: '#1a5490',
     fontStyle: 'italic',
     marginTop: 8,
   },
   detailCardTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 16,
   },
   detailRow: {
@@ -397,20 +432,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   detailLabel: {
-    fontSize: 15,
-    color: '#666',
+    fontSize: 16,
+    color: '#1a5490',
+    fontWeight: '600',
   },
   detailValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#1a5490',
   },
   detailSecondary: {
     fontSize: 13,
     color: '#999',
   },
   revenueText: {
-    color: '#007AFF',
+    color: '#1a5490',
   },
   profitText: {
     color: '#34C759',
@@ -438,7 +474,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     borderRadius: 4,
   },
   productRow: {
@@ -480,14 +516,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   productName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#1a5490',
     marginBottom: 4,
   },
   productSize: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 15,
+    color: '#1a5490',
+    fontWeight: '600',
   },
   productStats: {
     flexDirection: 'row',
@@ -496,12 +533,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   productStat: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: 14,
+    color: '#1a5490',
+    fontWeight: '600',
     backgroundColor: '#f0f0f0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
   productActions: {
     flexDirection: 'row',
@@ -509,7 +547,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
@@ -524,7 +562,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   header: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
@@ -540,7 +578,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   statLabel: {
     fontSize: 11,
@@ -548,10 +586,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   newShipmentButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#1a5490',
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   newShipmentButtonText: {
     color: 'white',
@@ -563,7 +606,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
@@ -577,8 +620,8 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
   },
   filterChipActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#1a5490',
+    borderColor: '#1a5490',
   },
   filterChipText: {
     fontSize: 13,
@@ -592,7 +635,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   shipmentCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -626,7 +669,7 @@ const styles = StyleSheet.create({
   productCount: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   productCountLabel: {
     fontSize: 12,
@@ -753,7 +796,7 @@ const styles = StyleSheet.create({
   },
   inventoryProgressFill: {
     height: '100%',
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     borderRadius: 3,
   },
   notesSection: {
@@ -788,10 +831,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   emptyButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#1a5490',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   emptyButtonText: {
     color: 'white',
@@ -802,7 +850,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   loadingText: {
     marginTop: 12,
@@ -816,14 +864,14 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
   },
   totalInvestmentLabel: {
-    fontSize: 16,
-    color: '#333',
+    fontSize: 17,
+    color: '#1a5490',
     fontWeight: 'bold',
   },
   totalInvestmentValue: {
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
   },
   marginTopLarge: {
     marginTop: 16,

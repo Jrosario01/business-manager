@@ -261,9 +261,23 @@ export default function CustomersScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{t('customers.noCustomersFound')}</Text>
+            <Text style={styles.emptyText}>
+              {searchQuery
+                ? t('customers.noCustomersFound')
+                : filterType === 'owes'
+                  ? t('customers.noOneOwes')
+                  : filterType === 'wishlist'
+                    ? t('customers.noWishlists')
+                    : t('customers.noCustomersFound')
+              }
+            </Text>
             <Text style={styles.emptySubtext}>
-              {searchQuery ? t('customers.tryDifferentSearch') : t('customers.addFirstCustomer')}
+              {searchQuery
+                ? t('customers.tryDifferentSearch')
+                : filterType === 'all'
+                  ? t('customers.addFirstCustomer')
+                  : t('customers.allCaughtUp')
+              }
             </Text>
           </View>
         }
@@ -300,18 +314,18 @@ export default function CustomersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   header: {
-    backgroundColor: 'white',
+    backgroundColor: '#1a5490',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 16,
   },
   searchInput: {
     flex: 1,
@@ -338,14 +352,17 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#e0cf80',
   },
   filterChipActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
+    borderColor: '#e0cf80',
   },
   filterChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
   },
   filterChipTextActive: {
     color: 'white',
@@ -354,29 +371,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'white',
+    backgroundColor: '#1a5490',
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   statsCompact: {
     flex: 1,
     marginRight: 10,
   },
   statsCompactText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 13,
+    color: 'white',
+    fontWeight: '600',
   },
   addButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#e0cf80',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   addButtonText: {
-    color: 'white',
+    color: '#1a5490',
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -385,7 +407,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   customerCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     marginBottom: 10,
@@ -407,7 +429,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -424,12 +446,12 @@ const styles = StyleSheet.create({
   customerName: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 4,
   },
   customerPhone: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
   },
   balanceBadge: {
     backgroundColor: '#FF3B30',
@@ -466,13 +488,13 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 10,
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 2,
   },
   statValue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
   },
   balanceValue: {
     color: '#FF3B30',
@@ -491,17 +513,17 @@ const styles = StyleSheet.create({
   wishlistTitle: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 4,
   },
   wishlistItem: {
     fontSize: 13,
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 3,
   },
   lastPurchase: {
     fontSize: 11,
-    color: '#999',
+    color: '#1a5490',
     marginTop: 6,
     fontStyle: 'italic',
   },
@@ -512,7 +534,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 6,
   },
   emptySubtext: {

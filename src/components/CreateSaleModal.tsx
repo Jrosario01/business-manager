@@ -9,6 +9,10 @@ import {
   TouchableOpacity,
   Alert,
   Image,
+  Platform,
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useProductsStore, SupabaseProduct as CatalogProduct } from '../store/productsStore';
@@ -81,6 +85,9 @@ export default function CreateSaleModal({
   // Notes
   const [notes, setNotes] = useState('');
 
+  // Loading state
+  const [isSaving, setIsSaving] = useState(false);
+
   const getCustomerSuggestions = () => {
     if (!customerSearch || customerSearch.length < 2) return [];
     return searchCustomers(customerSearch).slice(0, 5);
@@ -131,13 +138,15 @@ export default function CreateSaleModal({
 
   const selectProduct = (index: number, catalogProduct: CatalogProduct) => {
     const newProducts = [...products];
+    // Prepopulate with sale_price if available, otherwise use cost * 2
+    const defaultPrice = catalogProduct.sale_price || (catalogProduct.cost * 2);
     newProducts[index] = {
       brand: catalogProduct.brand,
       name: catalogProduct.name,
       size: catalogProduct.size,
       unitCost: catalogProduct.cost,
       quantity: newProducts[index].quantity,
-      salePrice: '', // Leave empty for manual entry
+      salePrice: defaultPrice.toString(),
       amountPaid: newProducts[index].amountPaid,
       catalogProductId: catalogProduct.id,
       showCost: false,
@@ -298,58 +307,67 @@ export default function CreateSaleModal({
       return;
     }
 
-    const { totalCost, totalRevenue, profit, paid, balance } = calculateTotals();
+    setIsSaving(true);
 
-    const paymentStatus = balance === 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending');
+    try {
+      const { totalCost, totalRevenue, profit, paid, balance } = calculateTotals();
 
-    // Save new customer to database if adding
-    let customerData = selectedCustomer;
-    if (isAddingNewCustomer) {
-      await addCustomer({
-        name: newCustomerName.trim(),
-        phone: newCustomerPhone.trim(),
-        balance: 0,
-        wishlist: [],
-        totalPurchases: 0,
-      });
-      // Use the newly added customer (it will be at the end of the customers array after adding)
-      customerData = { name: newCustomerName.trim(), phone: newCustomerPhone.trim(), isNew: true };
+      const paymentStatus = balance === 0 ? 'paid' : (paid > 0 ? 'partial' : 'pending');
+
+      // Save new customer to database if adding
+      let customerData = selectedCustomer;
+      if (isAddingNewCustomer) {
+        await addCustomer({
+          name: newCustomerName.trim(),
+          phone: newCustomerPhone.trim(),
+          balance: 0,
+          wishlist: [],
+          totalPurchases: 0,
+        });
+        // Use the newly added customer (it will be at the end of the customers array after adding)
+        customerData = { name: newCustomerName.trim(), phone: newCustomerPhone.trim(), isNew: true };
+      }
+
+      const currentDate = new Date().toISOString();
+
+      const saleData = {
+        customer: customerData,
+        products: products.map(p => {
+          const productTotal = parseFloat(p.salePrice) * parseInt(p.quantity);
+          const productPaid = parseFloat(p.amountPaid);
+          const productBalance = productTotal - productPaid;
+          const productStatus = productBalance === 0 ? 'paid' : (productPaid > 0 ? 'partial' : 'pending');
+
+          return {
+            brand: p.brand,
+            name: p.name,
+            size: p.size,
+            quantity: parseInt(p.quantity),
+            unitCost: p.unitCost,
+            soldPrice: parseFloat(p.salePrice),
+            amountPaid: productPaid,
+            balance: productBalance,
+            paymentStatus: productStatus,
+            catalogProductId: p.catalogProductId,
+          };
+        }),
+        totalCost,
+        totalRevenue,
+        profit,
+        amountPaid: paid,
+        paymentStatus,
+        notes: notes.trim(),
+        date: currentDate,
+      };
+
+      await onSubmit(saleData);
+      Alert.alert('Success', 'Sale created successfully!');
+      resetForm();
+    } catch (error) {
+      Alert.alert('Error', (error as Error).message);
+    } finally {
+      setIsSaving(false);
     }
-
-    const currentDate = new Date().toISOString();
-
-    const saleData = {
-      customer: customerData,
-      products: products.map(p => {
-        const productTotal = parseFloat(p.salePrice) * parseInt(p.quantity);
-        const productPaid = parseFloat(p.amountPaid);
-        const productBalance = productTotal - productPaid;
-        const productStatus = productBalance === 0 ? 'paid' : (productPaid > 0 ? 'partial' : 'pending');
-
-        return {
-          brand: p.brand,
-          name: p.name,
-          size: p.size,
-          quantity: parseInt(p.quantity),
-          unitCost: p.unitCost,
-          soldPrice: parseFloat(p.salePrice),
-          amountPaid: productPaid,
-          balance: productBalance,
-          paymentStatus: productStatus,
-          catalogProductId: p.catalogProductId,
-        };
-      }),
-      totalCost,
-      totalRevenue,
-      profit,
-      amountPaid: paid,
-      paymentStatus,
-      notes: notes.trim(),
-      date: currentDate,
-    };
-
-    onSubmit(saleData);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -408,14 +426,15 @@ export default function CreateSaleModal({
       transparent={false}
       onRequestClose={handleCancel}
       presentationStyle="fullScreen"
+      statusBarTranslucent={true}
     >
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleCancel}>
-            <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
+          <TouchableOpacity onPress={handleCancel} disabled={isSaving} style={styles.headerButton}>
+            <Text style={[styles.cancelButton, isSaving && styles.disabledButton]}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>{t('sales.newSale')}</Text>
-          <View style={styles.headerSpacer} />
+          <View style={styles.headerButton} />
         </View>
 
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
@@ -780,22 +799,45 @@ export default function CreateSaleModal({
         {/* Complete Sale Button */}
         <View style={styles.completeSaleContainer}>
           <TouchableOpacity
-            style={styles.completeSaleButton}
+            style={[styles.completeSaleButton, isSaving && styles.disabledCompleteSaleButton]}
             onPress={handleSubmit}
             activeOpacity={0.8}
+            disabled={isSaving}
           >
             <Text style={styles.completeSaleButtonText}>{t('modals.createSale.completeSale')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Full Screen Loading Overlay */}
+        {isSaving && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#00ffff" />
+              <Text style={styles.loadingText}>Creating sale...</Text>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
 }
 
+const { height: screenHeight } = Dimensions.get('window');
+const getHeaderPaddingTop = () => {
+  if (Platform.OS === 'android') {
+    const statusBarHeight = StatusBar.currentHeight || 0;
+    return statusBarHeight + (screenHeight > 800 ? 30 : 25);
+  } else {
+    return screenHeight > 800 ? 60 : 50;
+  }
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
+    paddingBottom: 0,
+    marginBottom: 0,
   },
   header: {
     flexDirection: 'row',
@@ -803,30 +845,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: 'white',
+    paddingTop: getHeaderPaddingTop(),
+    paddingBottom: 20,
+    backgroundColor: '#1a5490',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
-  headerSpacer: {
-    width: 60,
+  headerButton: {
+    minWidth: 70,
   },
   cancelButton: {
     fontSize: 15,
     color: '#FF3B30',
     fontWeight: '600',
   },
+  disabledButton: {
+    opacity: 0.5,
+  },
   title: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#333',
+    color: 'white',
+    flex: 1,
+    textAlign: 'center',
+  },
+  saveButton: {
+    fontSize: 15,
+    color: '#00ffff',
+    fontWeight: '600',
   },
   completeSaleContainer: {
-    backgroundColor: 'white',
+    backgroundColor: '#1a5490',
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: 20,
     borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
+    borderTopColor: 'rgba(0, 255, 255, 0.2)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
@@ -834,18 +888,18 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   completeSaleButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#e0cf80',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
   },
   completeSaleButtonText: {
-    color: 'white',
+    color: '#1a5490',
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -856,12 +910,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 8,
     marginTop: 4,
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
@@ -874,7 +928,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 6,
     marginTop: 8,
   },
@@ -888,10 +942,10 @@ const styles = StyleSheet.create({
   },
   suggestionsContainer: {
     marginTop: 6,
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: '#1a5490',
     maxHeight: 200,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -910,12 +964,12 @@ const styles = StyleSheet.create({
   suggestionName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 2,
   },
   suggestionPhone: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
   },
   noResults: {
     marginTop: 8,
@@ -970,7 +1024,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   editCustomerButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -1007,7 +1061,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#e0e0e0',
   },
   productCard: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
@@ -1026,7 +1080,7 @@ const styles = StyleSheet.create({
   productNumber: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   removeButton: {
     fontSize: 13,
@@ -1035,10 +1089,10 @@ const styles = StyleSheet.create({
   },
   productSuggestionsContainer: {
     marginTop: 6,
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: '#1a5490',
     maxHeight: 250,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1133,7 +1187,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   editProductButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -1157,7 +1211,7 @@ const styles = StyleSheet.create({
   },
   showCostButtonText: {
     fontSize: 12,
-    color: '#007AFF',
+    color: '#1a5490',
     fontWeight: '600',
   },
   unitCostContainer: {
@@ -1201,21 +1255,21 @@ const styles = StyleSheet.create({
   productTotalLabel: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
   },
   productTotalValue: {
     fontSize: 15,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   costLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#1a5490',
   },
   costValue: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
   },
   balanceRow: {
     marginTop: 4,
@@ -1234,19 +1288,19 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
   },
   addProductButton: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#007AFF',
+    borderColor: '#1a5490',
     borderStyle: 'dashed',
   },
   addProductButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1255,12 +1309,12 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
   },
   summaryValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
   },
   profitLabel: {
     fontWeight: '600',
@@ -1272,12 +1326,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 2,
-    borderTopColor: '#007AFF',
+    borderTopColor: '#1a5490',
   },
   totalLabel: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
   },
   totalValue: {
     fontSize: 18,
@@ -1304,5 +1358,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: '#856404',
+  },
+  disabledCompleteSaleButton: {
+    opacity: 0.5,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContainer: {
+    backgroundColor: '#1a5490',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    color: '#00ffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
   },
 });

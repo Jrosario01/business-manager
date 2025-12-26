@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Image,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useShipmentsStore } from '../store/shipmentsStore';
 
 type ViewMode = 'consolidated' | 'per-shipment';
@@ -38,9 +40,11 @@ export default function InventoryScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('consolidated');
   const [searchQuery, setSearchQuery] = useState('');
 
-  useEffect(() => {
-    loadShipments();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadShipments();
+    }, [loadShipments])
+  );
 
   // Consolidated inventory - group by product across all shipments
   const consolidatedInventory = useMemo(() => {
@@ -147,26 +151,26 @@ export default function InventoryScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('inventory.title')}</Text>
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchContainer}>
+      {/* Search Header with Gradient */}
+      <LinearGradient
+        colors={['#1a5490', '#1a5490']}
+        style={styles.searchContainer}
+      >
         <TextInput
           style={styles.searchInput}
           placeholder={t('inventory.searchPlaceholder')}
+          placeholderTextColor="#99b3cc"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-      </View>
+      </LinearGradient>
 
       {/* View Toggle */}
       <View style={styles.toggleContainer}>
         <TouchableOpacity
           style={[styles.toggleButton, viewMode === 'consolidated' && styles.toggleButtonActive]}
           onPress={() => setViewMode('consolidated')}
+          activeOpacity={0.7}
         >
           <Text style={[styles.toggleText, viewMode === 'consolidated' && styles.toggleTextActive]}>
             {t('inventory.generalView')}
@@ -175,6 +179,7 @@ export default function InventoryScreen() {
         <TouchableOpacity
           style={[styles.toggleButton, viewMode === 'per-shipment' && styles.toggleButtonActive]}
           onPress={() => setViewMode('per-shipment')}
+          activeOpacity={0.7}
         >
           <Text style={[styles.toggleText, viewMode === 'per-shipment' && styles.toggleTextActive]}>
             {t('inventory.perShipment')}
@@ -186,11 +191,16 @@ export default function InventoryScreen() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Inventory Stats */}
         <View style={styles.statsSection}>
-          <View style={styles.statCard}>
+          <LinearGradient
+            colors={['#e0cf80', '#e6d699']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.statCard}
+          >
             <Text style={styles.statLabel}>{t('inventory.totalInventory')}</Text>
             <Text style={styles.statValue}>{inventoryStats.totalUnits}</Text>
             <Text style={styles.statSubtext}>{t('inventory.unitsInStock')}</Text>
-          </View>
+          </LinearGradient>
         </View>
 
         {viewMode === 'consolidated' ? (
@@ -321,72 +331,74 @@ export default function InventoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#666',
-  },
-  header: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
+    fontWeight: '500',
   },
   searchContainer: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    shadowColor: '#1a5490',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   searchInput: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
+    color: '#1a5490',
+    fontWeight: '500',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+    backgroundColor: '#1a5490',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   toggleButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#e0cf80',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e0cf80',
   },
   toggleButtonActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a5490',
+    borderColor: '#e0cf80',
   },
   toggleText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
   },
   toggleTextActive: {
-    color: 'white',
+    color: '#e0cf80',
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 12,
   },
   emptyState: {
     paddingVertical: 60,
@@ -394,18 +406,21 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
+    color: '#6c757d',
+    fontWeight: '500',
   },
   productCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    backgroundColor: '#e0cf80',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#00ffff',
   },
   productHeader: {
     flexDirection: 'row',
@@ -413,8 +428,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   productImageContainer: {
-    width: 80,
-    height: 80,
+    width: 95,
+    height: 95,
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -435,57 +450,68 @@ const styles = StyleSheet.create({
   productInfo: {
     flex: 1,
     justifyContent: 'center',
+    minWidth: 0,
   },
   productName: {
     fontSize: 17,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: '#1a5490',
+    marginBottom: 5,
+    letterSpacing: -0.3,
+    flexWrap: 'wrap',
+    flexShrink: 1,
   },
   productSize: {
     fontSize: 14,
-    color: '#666',
+    color: '#6c757d',
     marginBottom: 8,
+    fontWeight: '500',
+    flexWrap: 'wrap',
+    flexShrink: 1,
   },
   productMetrics: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   totalQuantity: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a5490',
   },
   totalValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#34C759',
+    color: '#1a5490',
   },
   totalValueSecondary: {
     fontSize: 12,
-    color: '#999',
+    color: '#6c757d',
   },
   breakdown: {
-    paddingTop: 12,
-    borderTopWidth: 1,
+    paddingTop: 14,
+    marginTop: 4,
+    borderTopWidth: 2,
     borderTopColor: '#f0f0f0',
   },
   breakdownTitle: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
+    fontWeight: '700',
+    color: '#1a5490',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   breakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   breakdownShipment: {
     fontSize: 13,
-    color: '#666',
+    color: '#495057',
     flex: 1,
+    fontWeight: '500',
   },
   breakdownDetails: {
     flexDirection: 'row',
@@ -505,15 +531,17 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   shipmentCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 0,
+    backgroundColor: '#e0cf80',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+    borderLeftWidth: 4,
+    borderLeftColor: '#00ffff',
   },
   shipmentHeader: {
     flexDirection: 'row',
@@ -521,7 +549,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: 'rgba(0, 47, 107, 0.2)',
   },
   shipmentTitleRow: {
     flexDirection: 'row',
@@ -531,11 +559,11 @@ const styles = StyleSheet.create({
   shipmentNumber: {
     fontSize: 17,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
   },
   shipmentDate: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
   },
   shipmentSummary: {
     alignItems: 'flex-end',
@@ -543,13 +571,13 @@ const styles = StyleSheet.create({
   shipmentUnits: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#1a5490',
     marginBottom: 4,
   },
   shipmentValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
   },
   shipmentValueSecondary: {
     fontSize: 12,
@@ -566,36 +594,38 @@ const styles = StyleSheet.create({
   },
   borderTop: {
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: 'rgba(0, 47, 107, 0.2)',
   },
   shipmentProductImageContainer: {
     marginRight: 12,
   },
   shipmentProductImage: {
-    width: 50,
-    height: 50,
+    width: 80,
+    height: 80,
     borderRadius: 8,
   },
   shipmentProductImagePlaceholder: {
-    width: 50,
-    height: 50,
+    width: 80,
+    height: 80,
     borderRadius: 8,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'rgba(0, 47, 107, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   shipmentProductInfo: {
     flex: 1,
+    minWidth: 0,
   },
   shipmentProductName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 4,
+    flexShrink: 1,
   },
   shipmentProductSize: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
   },
   shipmentProductStats: {
     alignItems: 'flex-end',
@@ -603,18 +633,18 @@ const styles = StyleSheet.create({
   shipmentProductQty: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#1a5490',
     marginBottom: 2,
   },
   shipmentProductCost: {
     fontSize: 12,
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 2,
   },
   shipmentProductValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
   },
   shipmentProductValueSecondary: {
     fontSize: 11,
@@ -631,7 +661,6 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   statCard: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 15,
     shadowColor: '#000',
@@ -645,28 +674,28 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 8,
     fontWeight: '600',
   },
   statValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 4,
   },
   statSubtext: {
     fontSize: 12,
-    color: '#999',
+    color: '#1a5490',
   },
   salePriceText: {
     fontSize: 15,
-    fontWeight: '600',
-    color: '#34C759',
+    fontWeight: '700',
+    color: '#1a5490',
   },
   shipmentSalePrice: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#34C759',
+    color: '#1a5490',
   },
 });

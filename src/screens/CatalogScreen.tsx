@@ -96,7 +96,7 @@ export default function CatalogScreen() {
         </View>
         <View style={styles.productInfo}>
           <View style={styles.nameRow}>
-            <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
+            <Text style={styles.productName}>{product.name}</Text>
             <Text style={styles.productSize}>{product.size}</Text>
           </View>
           <Text style={styles.productBrand}>{product.brand}</Text>
@@ -157,7 +157,7 @@ export default function CatalogScreen() {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#e0cf80" />
         <Text style={styles.loadingText}>{t('catalog.loadingProducts')}</Text>
       </View>
     );
@@ -167,7 +167,7 @@ export default function CatalogScreen() {
     <View style={styles.container}>
       {/* Compact header with search, stats and add button */}
       <LinearGradient
-        colors={['#667eea', '#764ba2']}
+        colors={['#1a5490', '#1a5490']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.header}
@@ -255,7 +255,7 @@ export default function CatalogScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#1a5490',
   },
   header: {
     padding: 16,
@@ -309,8 +309,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statsText: {
-    fontSize: 13,
-    color: 'white',
+    fontSize: 16,
+    color: '#e0cf80',
     fontWeight: 'bold',
   },
   statsDot: {
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
   },
   addButton: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 20,
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   addButtonText: {
-    color: '#667eea',
+    color: '#002f6b',
     fontSize: 15,
     fontWeight: 'bold',
   },
@@ -348,45 +348,45 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingHorizontal: 4,
     borderBottomWidth: 3,
-    borderBottomColor: '#667eea',
+    borderBottomColor: '#00ffff',
   },
   brandTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#667eea',
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#e0cf80',
     flex: 1,
     letterSpacing: 0.5,
   },
   brandTitleCompact: {
-    fontSize: 18,
+    fontSize: 24,
   },
   brandCount: {
-    fontSize: 13,
-    color: '#667eea',
+    fontSize: 14,
+    color: '#002f6b',
     fontWeight: 'bold',
-    backgroundColor: '#f0f0ff',
+    backgroundColor: '#e0cf80',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 16,
-    minWidth: 32,
+    minWidth: 34,
     textAlign: 'center',
     borderWidth: 2,
-    borderColor: '#667eea',
+    borderColor: '#e0cf80',
   },
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
-    shadowColor: '#667eea',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 4,
     borderLeftWidth: 4,
-    borderLeftColor: '#667eea',
+    borderLeftColor: '#00ffff',
   },
   productRowCompact: {
     padding: 12,
@@ -398,21 +398,21 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   productImage: {
-    width: 70,
-    height: 70,
+    width: 100,
+    height: 100,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(0, 47, 107, 0.2)',
   },
   placeholderImage: {
-    width: 70,
-    height: 70,
+    width: 100,
+    height: 100,
     borderRadius: 14,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'rgba(0, 47, 107, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#e9ecef',
+    borderColor: 'rgba(0, 47, 107, 0.2)',
   },
   placeholderText: {
     fontSize: 32,
@@ -431,24 +431,24 @@ const styles = StyleSheet.create({
   productName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#212529',
+    color: '#1a5490',
     flexShrink: 1,
   },
   productSize: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#667eea',
-    backgroundColor: '#f0f0ff',
+    color: '#002f6b',
+    backgroundColor: 'rgba(0, 47, 107, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#667eea',
+    borderColor: '#002f6b',
   },
   productBrand: {
     fontSize: 11,
     fontWeight: 'bold',
-    color: '#6c757d',
+    color: '#002f6b',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -458,36 +458,36 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   priceBox: {
-    backgroundColor: '#f0f0ff',
+    backgroundColor: 'rgba(0, 47, 107, 0.1)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#667eea',
+    borderColor: '#002f6b',
     minWidth: 80,
     alignItems: 'center',
   },
   saleBox: {
-    backgroundColor: '#e8f5e9',
-    borderColor: '#34C759',
+    backgroundColor: 'rgba(0, 47, 107, 0.15)',
+    borderColor: '#002f6b',
   },
   priceLabel: {
     fontSize: 9,
-    color: '#667eea',
+    color: '#002f6b',
     marginBottom: 2,
     fontWeight: 'bold',
     textTransform: 'uppercase',
   },
   saleLabel: {
-    color: '#34C759',
+    color: '#002f6b',
   },
   priceValue: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#667eea',
+    color: '#002f6b',
   },
   saleValue: {
-    color: '#34C759',
+    color: '#002f6b',
   },
   emptyContainer: {
     padding: 40,
@@ -496,23 +496,23 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#e0cf80',
     marginBottom: 6,
   },
   emptySubtext: {
     fontSize: 13,
-    color: '#999',
+    color: '#99b3cc',
     textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#666',
+    color: '#e0cf80',
   },
 });

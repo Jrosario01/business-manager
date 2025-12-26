@@ -58,7 +58,6 @@ export async function allocateProductFIFO(
       });
 
     if (error) {
-      console.error('Error getting available inventory:', error);
       return {
         success: false,
         allocations: [],
@@ -72,7 +71,7 @@ export async function allocateProductFIFO(
         success: false,
         allocations: [],
         totalCost: 0,
-        errorMessage: `No inventory available for ${brand} ${name} ${size}`,
+        errorMessage: `Out of Stock: ${brand} ${name} ${size}\n\nThis product has no inventory. Please create a shipment first to add inventory before making a sale.`,
       };
     }
 
@@ -106,7 +105,7 @@ export async function allocateProductFIFO(
         success: false,
         allocations: [],
         totalCost: 0,
-        errorMessage: `Insufficient inventory for ${brand} ${name} ${size}. Need ${quantityNeeded}, only ${totalAvailable} available.`,
+        errorMessage: `Insufficient Stock: ${brand} ${name} ${size}\n\nYou need ${quantityNeeded} units but only have ${totalAvailable} available.\n\nPlease reduce the quantity or create a new shipment to add more inventory.`,
       };
     }
 
@@ -117,7 +116,6 @@ export async function allocateProductFIFO(
       totalCost,
     };
   } catch (error) {
-    console.error('Error in allocateProductFIFO:', error);
     return {
       success: false,
       allocations: [],
@@ -152,7 +150,6 @@ export async function applyAllocations(
       .insert(allocationRecords);
 
     if (insertError) {
-      console.error('Error inserting allocations:', insertError);
       return { success: false, error: insertError.message };
     }
 
@@ -166,7 +163,6 @@ export async function applyAllocations(
         .single();
 
       if (fetchError || !currentItem) {
-        console.error('Error fetching shipment item:', fetchError);
         return { success: false, error: fetchError?.message || 'Item not found' };
       }
 
@@ -179,7 +175,6 @@ export async function applyAllocations(
         .eq('id', alloc.shipmentItemId);
 
       if (updateError) {
-        console.error('Error updating inventory:', updateError);
         // Note: In production, you'd want to rollback previous allocations here
         return { success: false, error: updateError.message };
       }
@@ -187,7 +182,6 @@ export async function applyAllocations(
 
     return { success: true };
   } catch (error) {
-    console.error('Error applying allocations:', error);
     return { success: false, error: (error as Error).message };
   }
 }

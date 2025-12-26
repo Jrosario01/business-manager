@@ -9,6 +9,10 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Platform,
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
@@ -37,6 +41,8 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
   const [wishlistInput, setWishlistInput] = useState('');
   const [wishlist, setWishlist] = useState<string[]>(initialData?.wishlist || []);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Get customer's purchase history
   const customerSales = isEdit && customerId
@@ -73,7 +79,7 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
     }).slice(0, 10);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim()) {
       Alert.alert(t('common.error'), t('modals.addCustomer.enterName'));
       return;
@@ -83,13 +89,23 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
       return;
     }
 
-    onSubmit({
-      name: name.trim(),
-      phone: phone.trim(),
-      wishlist: wishlist,
-    });
+    setIsSaving(true);
 
-    resetForm();
+    try {
+      await onSubmit({
+        name: name.trim(),
+        phone: phone.trim(),
+        wishlist: wishlist,
+      });
+
+      Alert.alert('Success', isEdit ? 'Customer updated successfully!' : 'Customer added successfully!');
+      resetForm();
+    } catch (error) {
+      console.error('Error saving customer:', error);
+      Alert.alert('Error', 'Failed to save customer. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const resetForm = () => {
@@ -123,10 +139,19 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
         {
           text: t('common.delete'),
           style: 'destructive',
-          onPress: () => {
-            if (onDelete) {
-              onDelete();
-              resetForm();
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              if (onDelete) {
+                await onDelete();
+                Alert.alert('Success', 'Customer deleted successfully!');
+                resetForm();
+              }
+            } catch (error) {
+              console.error('Error deleting customer:', error);
+              Alert.alert('Error', 'Failed to delete customer. Please try again.');
+            } finally {
+              setIsDeleting(false);
             }
           },
         },
@@ -163,15 +188,17 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
       animationType="slide"
       transparent={false}
       onRequestClose={handleCancel}
+      presentationStyle="fullScreen"
+      statusBarTranslucent={true}
     >
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleCancel}>
-            <Text style={styles.cancelButton}>{t('common.cancel')}</Text>
+          <TouchableOpacity onPress={handleCancel} disabled={isSaving || isDeleting}>
+            <Text style={[styles.cancelButton, (isSaving || isDeleting) && styles.disabledButton]}>{t('common.cancel')}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>{isEdit ? t('modals.addCustomer.editCustomer') : t('modals.addCustomer.addCustomer')}</Text>
-          <TouchableOpacity onPress={handleSubmit}>
-            <Text style={styles.saveButton}>{t('common.save')}</Text>
+          <TouchableOpacity onPress={handleSubmit} disabled={isSaving || isDeleting}>
+            <Text style={[styles.saveButton, (isSaving || isDeleting) && styles.disabledButton]}>{t('common.save')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -320,45 +347,84 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
 
           {/* Delete Button */}
           {isEdit && onDelete && (
-            <TouchableOpacity onPress={handleDelete} style={styles.deleteButtonBottom}>
+            <TouchableOpacity onPress={handleDelete} style={[styles.deleteButtonBottom, (isSaving || isDeleting) && styles.deleteButtonDisabled]} disabled={isSaving || isDeleting}>
               <Text style={styles.deleteButtonText}>{t('modals.addCustomer.deleteCustomer')}</Text>
             </TouchableOpacity>
           )}
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
+
+        {/* Full Screen Loading Overlay for Saving */}
+        {isSaving && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#00ffff" />
+              <Text style={styles.loadingText}>{isEdit ? 'Updating customer...' : 'Adding customer...'}</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Full Screen Loading Overlay for Deleting */}
+        {isDeleting && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#FF3B30" />
+              <Text style={styles.loadingText}>Deleting customer...</Text>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
 }
 
+const { height: screenHeight } = Dimensions.get('window');
+const getHeaderPaddingTop = () => {
+  if (Platform.OS === 'android') {
+    const statusBarHeight = StatusBar.currentHeight || 0;
+    // For Android, base padding on status bar + screen-relative padding
+    return statusBarHeight + (screenHeight > 800 ? 30 : 25);
+  } else {
+    // For iOS, use screen-relative padding
+    return screenHeight > 800 ? 60 : 50;
+  }
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1a5490',
+    paddingBottom: 0,
+    marginBottom: 0,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'white',
+    paddingTop: getHeaderPaddingTop(),
+    paddingBottom: 20,
+    backgroundColor: '#1a5490',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   cancelButton: {
     fontSize: 16,
     color: '#FF3B30',
     fontWeight: '600',
   },
+  disabledButton: {
+    opacity: 0.5,
+  },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: 'white',
   },
   saveButton: {
     fontSize: 16,
-    color: '#34C759',
+    color: '#00ffff',
     fontWeight: '600',
   },
   deleteButtonBottom: {
@@ -368,6 +434,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     marginHorizontal: 4,
+  },
+  deleteButtonDisabled: {
+    opacity: 0.5,
   },
   deleteButtonText: {
     color: 'white',
@@ -391,20 +460,20 @@ const styles = StyleSheet.create({
   },
   historyDate: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
     fontWeight: '600',
   },
   historyAmount: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#1a5490',
   },
   historyProducts: {
     marginBottom: 8,
   },
   historyProduct: {
     fontSize: 13,
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 3,
   },
   historyFooter: {
@@ -424,16 +493,17 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+    paddingTop: 24,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#e0cf80',
     marginBottom: 12,
     marginTop: 8,
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -446,7 +516,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 8,
     marginTop: 12,
   },
@@ -460,15 +530,16 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: 12,
-    color: '#999',
+    color: '#1a5490',
     marginTop: 6,
+    fontWeight: '600',
   },
   suggestionsContainer: {
     marginTop: 8,
-    backgroundColor: 'white',
+    backgroundColor: '#e0cf80',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: '#1a5490',
     maxHeight: 250,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -511,12 +582,12 @@ const styles = StyleSheet.create({
   suggestionText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#333',
+    color: '#1a5490',
     marginBottom: 2,
   },
   suggestionMeta: {
     fontSize: 13,
-    color: '#666',
+    color: '#1a5490',
   },
   noResults: {
     marginTop: 8,
@@ -538,7 +609,7 @@ const styles = StyleSheet.create({
   wishlistTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#666',
+    color: '#1a5490',
     marginBottom: 8,
   },
   wishlistItem: {
@@ -552,7 +623,7 @@ const styles = StyleSheet.create({
   },
   wishlistItemText: {
     fontSize: 14,
-    color: '#333',
+    color: '#1a5490',
     flex: 1,
   },
   removeButton: {
@@ -577,5 +648,33 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContainer: {
+    backgroundColor: '#1a5490',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    color: '#00ffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
   },
 });

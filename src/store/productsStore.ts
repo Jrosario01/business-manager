@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../config/supabase';
+import { getTableName } from '../utils/getTableName';
+import { isDemoAccount } from '../utils/isDemoAccount';
 
 // Supabase product type (matches database schema)
 export interface SupabaseProduct {
@@ -149,7 +151,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const { data, error } = await supabase
-        .from('products')
+        .from(getTableName('products'))
         .select('*')
         .eq('active', true)
         .order('brand', { ascending: true })
@@ -167,8 +169,13 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
   addProduct: async (product) => {
     set({ error: null });
     try {
+      // Demo account limits
+      if (isDemoAccount() && get().products.length >= 50) {
+        throw new Error('Demo account limit: Maximum 50 products');
+      }
+
       const { data, error } = await supabase
-        .from('products')
+        .from(getTableName('products'))
         .insert([product])
         .select()
         .single();
@@ -190,6 +197,14 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
   addProducts: async (products) => {
     set({ error: null });
     try {
+      // Demo account limits
+      if (isDemoAccount()) {
+        const currentCount = get().products.length;
+        if (currentCount + products.length > 50) {
+          throw new Error(`Demo account limit: Maximum 50 products (currently ${currentCount})`);
+        }
+      }
+
       // Generate SKUs and prepare products for insertion
       const productsWithSKU = products.map(product => {
         let sku = generateSKU(product.brand, product.name, product.size);
@@ -214,7 +229,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
       });
 
       const { data, error } = await supabase
-        .from('products')
+        .from(getTableName('products'))
         .insert(productsWithSKU)
         .select();
 
@@ -234,7 +249,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
     set({ error: null });
     try {
       const { error } = await supabase
-        .from('products')
+        .from(getTableName('products'))
         .update(product)
         .eq('id', id);
 
@@ -255,7 +270,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
     try {
       // Soft delete by setting active = false
       const { error } = await supabase
-        .from('products')
+        .from(getTableName('products'))
         .update({ active: false })
         .eq('id', id);
 
@@ -299,7 +314,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
     try {
       // Check if products already exist
       const { count } = await supabase
-        .from('products')
+        .from(getTableName('products'))
         .select('*', { count: 'exact', head: true });
 
       if (count && count > 0) {
@@ -310,7 +325,7 @@ export const useProductsStore = create<ProductsState>((set, get) => ({
 
       // Insert initial products
       const { error } = await supabase
-        .from('products')
+        .from(getTableName('products'))
         .insert(INITIAL_PRODUCTS);
 
       if (error) throw error;

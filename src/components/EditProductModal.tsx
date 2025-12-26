@@ -10,10 +10,14 @@ import {
   Image,
   Alert,
   Platform,
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { uploadImageToSupabase, deleteImageFromSupabase } from '../utils/imageUpload';
+import { isDemoAccount } from '../utils/isDemoAccount';
 
 interface EditProductModalProps {
   visible: boolean;
@@ -107,6 +111,9 @@ export default function EditProductModal({
   const [salePrice, setSalePrice] = useState('');
   const [image, setImage] = useState('');
   const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Update form when product changes
   useEffect(() => {
@@ -139,6 +146,16 @@ export default function EditProductModal({
   };
 
   const pickImage = async () => {
+    // Block image uploads for demo accounts
+    if (isDemoAccount()) {
+      Alert.alert(
+        'Demo Account Limitation',
+        'Image uploads are disabled for demo accounts to prevent storage abuse and keep the demo environment clean for all users.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (permissionResult.granted === false) {
@@ -149,16 +166,45 @@ export default function EditProductModal({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [1, 1],
       quality: 0.8,
+      allowsMultipleSelection: false,
     });
 
     if (!result.canceled && result.assets[0]) {
-      setImage(result.assets[0].uri);
+      const localUri = result.assets[0].uri;
+
+      // Show local image immediately for better UX
+      setImage(localUri);
+      setIsUploadingImage(true);
+
+      try {
+        // Upload to Supabase in background
+        console.log('Uploading image to Supabase...');
+        const publicUrl = await uploadImageToSupabase(localUri);
+
+        // Delete old image if it exists and is from Supabase
+        if (image && image.includes('supabase')) {
+          await deleteImageFromSupabase(image);
+        }
+
+        // Update with Supabase URL
+        setImage(publicUrl);
+        console.log('Image uploaded and URL updated');
+        Alert.alert('Success', 'Image uploaded successfully!');
+      } catch (error) {
+        console.error('Failed to upload image:', error);
+        Alert.alert(
+          'Upload Failed',
+          'Failed to upload image to cloud storage. The image will only be visible on this device.',
+          [{ text: 'OK' }]
+        );
+      } finally {
+        setIsUploadingImage(false);
+      }
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!product) return;
 
     if (!brand.trim()) {
@@ -174,17 +220,27 @@ export default function EditProductModal({
       return;
     }
 
-    onSubmit({
-      id: product.id,
-      brand: brand.trim(),
-      name: name.trim(),
-      size: size,
-      cost: parseFloat(cost),
-      sale_price: salePrice ? parseFloat(salePrice) : undefined,
-      image_url: image || undefined,
-    });
+    setIsSaving(true);
 
-    resetForm();
+    try {
+      await onSubmit({
+        id: product.id,
+        brand: brand.trim(),
+        name: name.trim(),
+        size: size,
+        cost: parseFloat(cost),
+        sale_price: salePrice ? parseFloat(salePrice) : undefined,
+        image_url: image || undefined,
+      });
+
+      Alert.alert('Success', 'Product updated successfully!');
+      resetForm();
+    } catch (error) {
+      console.error('Error updating product:', error);
+      Alert.alert('Error', 'Failed to update product. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = () => {
@@ -198,9 +254,18 @@ export default function EditProductModal({
         {
           text: t('common.delete'),
           style: 'destructive',
-          onPress: () => {
-            onDelete(product.id);
-            resetForm();
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              await onDelete(product.id);
+              Alert.alert('Success', 'Product deleted successfully!');
+              resetForm();
+            } catch (error) {
+              console.error('Error deleting product:', error);
+              Alert.alert('Error', 'Failed to delete product. Please try again.');
+            } finally {
+              setIsDeleting(false);
+            }
           },
         },
       ]
@@ -231,41 +296,45 @@ export default function EditProductModal({
       animationType="slide"
       transparent={false}
       onRequestClose={handleCancel}
+      presentationStyle="fullScreen"
+      statusBarTranslucent={true}
     >
       <View style={styles.container}>
-        <LinearGradient
-          colors={['#667eea', '#764ba2']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.header}
-        >
-          <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-            <Text style={styles.cancelButton}>✕</Text>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleCancel} disabled={isSaving || isDeleting}>
+            <Text style={[styles.cancelButton, (isSaving || isDeleting) && styles.disabledButton]}>{t('common.cancel')}</Text>
           </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <Text style={styles.titleIcon}>✏️</Text>
-            <Text style={styles.title}>{t('catalog.editProduct')}</Text>
-          </View>
-          <TouchableOpacity onPress={handleSubmit} style={styles.headerButton}>
-            <Text style={styles.saveButton}>✓</Text>
+          <Text style={styles.title}>{t('catalog.editProduct')}</Text>
+          <TouchableOpacity onPress={handleSubmit} disabled={isSaving || isDeleting}>
+            <Text style={[styles.saveButton, (isSaving || isDeleting) && styles.disabledButton]}>{t('common.save')}</Text>
           </TouchableOpacity>
-        </LinearGradient>
+        </View>
 
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           {/* Compact Image Section */}
           <View style={styles.imageSection}>
             {image ? (
               <View style={styles.imageContainer}>
-                <Image source={{ uri: image }} style={styles.productImage} />
+                <View style={styles.imageWrapper}>
+                  <Image source={{ uri: image }} style={styles.productImage} />
+                  {isUploadingImage && (
+                    <View style={styles.imageLoadingOverlay}>
+                      <ActivityIndicator size="small" color="#1a5490" />
+                      <Text style={styles.uploadingText}>Uploading...</Text>
+                    </View>
+                  )}
+                </View>
                 <TouchableOpacity
                   style={styles.changeImageButton}
                   onPress={pickImage}
+                  disabled={isUploadingImage}
                 >
                   <Text style={styles.changeImageText}>{t('modals.editProduct.change')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.removeImageButton}
                   onPress={() => setImage('')}
+                  disabled={isUploadingImage}
                 >
                   <Text style={styles.removeImageText}>✕</Text>
                 </TouchableOpacity>
@@ -274,16 +343,23 @@ export default function EditProductModal({
               <TouchableOpacity
                 style={styles.addImageButton}
                 onPress={pickImage}
+                disabled={isUploadingImage}
               >
-                <Text style={styles.imageIcon}>📷</Text>
-                <Text style={styles.imageText}>{t('modals.editProduct.addImage')}</Text>
+                {isUploadingImage ? (
+                  <ActivityIndicator size="small" color="#1a5490" />
+                ) : (
+                  <>
+                    <Text style={styles.imageIcon}>📷</Text>
+                    <Text style={styles.imageText}>{t('modals.editProduct.addImage')}</Text>
+                  </>
+                )}
               </TouchableOpacity>
             )}
           </View>
 
           {/* Brand Input with Autocomplete */}
           <View style={styles.card}>
-            <Text style={styles.label}>🏷️ {t('catalog.brand')} *</Text>
+            <Text style={styles.label}>{t('catalog.brand')} *</Text>
             <View style={styles.brandCard}>
               <TextInput
                 style={styles.input}
@@ -339,7 +415,7 @@ export default function EditProductModal({
 
           {/* Product Name */}
           <View style={styles.card}>
-            <Text style={styles.label}>📦 {t('catalog.productName')} *</Text>
+            <Text style={styles.label}>{t('catalog.productName')} *</Text>
             <TextInput
               style={styles.input}
               placeholder={t('modals.editProduct.productNamePlaceholder')}
@@ -351,7 +427,7 @@ export default function EditProductModal({
 
           {/* Size Selector */}
           <View style={styles.card}>
-            <Text style={styles.label}>📏 {t('catalog.size')} *</Text>
+            <Text style={styles.label}>{t('catalog.size')} *</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -379,7 +455,7 @@ export default function EditProductModal({
 
           {/* Unit Cost */}
           <View style={styles.card}>
-            <Text style={styles.label}>💰 {t('modals.editProduct.unitCost')} *</Text>
+            <Text style={styles.label}>{t('modals.editProduct.unitCost')} *</Text>
             <TextInput
               style={styles.input}
               placeholder="0.00"
@@ -392,7 +468,7 @@ export default function EditProductModal({
 
           {/* Sale Price */}
           <View style={styles.card}>
-            <Text style={styles.label}>💵 {t('catalog.salePrice')} ($)</Text>
+            <Text style={styles.label}>{t('catalog.salePrice')} ($)</Text>
             <TextInput
               style={styles.input}
               placeholder="0.00"
@@ -406,183 +482,206 @@ export default function EditProductModal({
 
           {/* Delete Button */}
           <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-            <Text style={styles.deleteButtonText}>🗑️ {t('catalog.deleteProduct')}</Text>
+            <Text style={styles.deleteButtonText}>{t('catalog.deleteProduct')}</Text>
           </TouchableOpacity>
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
+
+        {/* Full Screen Loading Overlay for Saving */}
+        {isSaving && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#00ffff" />
+              <Text style={styles.loadingText}>Updating product...</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Full Screen Loading Overlay for Deleting */}
+        {isDeleting && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#FF3B30" />
+              <Text style={styles.loadingText}>Deleting product...</Text>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
 }
 
+const { height: screenHeight } = Dimensions.get('window');
+const getHeaderPaddingTop = () => {
+  if (Platform.OS === 'android') {
+    const statusBarHeight = StatusBar.currentHeight || 0;
+    return statusBarHeight + (screenHeight > 800 ? 30 : 25);
+  } else {
+    return screenHeight > 800 ? 60 : 50;
+  }
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#1a5490',
+    paddingBottom: 0,
+    marginBottom: 0,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingTop: getHeaderPaddingTop(),
+    paddingBottom: 20,
+    backgroundColor: '#1a5490',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 255, 255, 0.2)',
   },
   cancelButton: {
-    fontSize: 22,
-    color: 'white',
-    fontWeight: 'bold',
+    fontSize: 16,
+    color: '#FF3B30',
+    fontWeight: '600',
   },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  titleIcon: {
-    fontSize: 22,
+  disabledButton: {
+    opacity: 0.5,
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
   },
   saveButton: {
-    fontSize: 24,
-    color: 'white',
-    fontWeight: 'bold',
+    fontSize: 16,
+    color: '#00ffff',
+    fontWeight: '600',
   },
   content: {
     flex: 1,
-    padding: 16,
+    padding: 12,
   },
   card: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: '#e0cf80',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
   imageSection: {
     marginBottom: 12,
+    alignItems: 'center',
   },
   imageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
   },
+  imageWrapper: {
+    position: 'relative',
+  },
   productImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    borderWidth: 3,
-    borderColor: '#667eea',
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+  },
+  imageLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadingText: {
+    fontSize: 10,
+    color: '#1a5490',
+    fontWeight: '600',
+    marginTop: 4,
   },
   changeImageButton: {
-    backgroundColor: '#667eea',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#1a5490',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#e0cf80',
   },
   changeImageText: {
     color: 'white',
-    fontSize: 13,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '600',
   },
   removeImageButton: {
     backgroundColor: '#FF3B30',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
   },
   removeImageText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   addImageButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#667eea',
+    justifyContent: 'center',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
     borderStyle: 'dashed',
   },
   imageIcon: {
-    fontSize: 28,
-    marginRight: 12,
+    fontSize: 24,
+    marginRight: 8,
   },
   imageText: {
-    fontSize: 15,
-    color: '#667eea',
-    fontWeight: 'bold',
+    fontSize: 14,
+    color: '#1a5490',
+    fontWeight: '600',
   },
   label: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#667eea',
-    marginBottom: 10,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1a5490',
+    marginBottom: 6,
+    marginTop: 8,
   },
   brandCard: {
-    marginBottom: 12,
+    marginBottom: 0,
   },
   input: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    borderWidth: 2,
-    borderColor: '#e9ecef',
-    color: '#333',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   suggestionsContainer: {
-    marginTop: 8,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#e9ecef',
+    marginTop: 6,
+    backgroundColor: '#e0cf80',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
     maxHeight: 150,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
   },
   suggestionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
+    padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
@@ -590,21 +689,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9',
   },
   suggestionText: {
-    fontSize: 15,
-    color: '#333',
+    fontSize: 14,
+    color: '#1a5490',
   },
   createNewText: {
     color: '#2E7D32',
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   existingBadge: {
     fontSize: 11,
     color: '#34C759',
-    fontWeight: 'bold',
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    fontWeight: '600',
   },
   sizeScrollContainer: {
     flexDirection: 'row',
@@ -612,48 +707,37 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   sizeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: '#f8f9fa',
-    marginRight: 8,
-    borderWidth: 2,
-    borderColor: '#e9ecef',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f0f0f0',
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   sizeChipActive: {
-    backgroundColor: '#667eea',
-    borderColor: '#667eea',
-    shadowColor: '#667eea',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: '#1a5490',
+    borderColor: '#1a5490',
   },
   sizeChipText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#666',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1a5490',
   },
   sizeChipTextActive: {
     color: 'white',
   },
   deleteButton: {
     backgroundColor: '#FF3B30',
-    borderRadius: 16,
-    padding: 18,
+    borderRadius: 12,
+    padding: 14,
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   deleteButtonText: {
     color: 'white',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: 'bold',
-    letterSpacing: 0.5,
   },
   bottomSpacer: {
     height: 40,
@@ -663,5 +747,33 @@ const styles = StyleSheet.create({
     color: '#999',
     marginTop: 4,
     marginBottom: 12,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  loadingContainer: {
+    backgroundColor: '#1a5490',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    color: '#00ffff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
   },
 });
