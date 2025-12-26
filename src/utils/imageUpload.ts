@@ -1,5 +1,10 @@
 import { supabase } from '../config/supabase';
 
+// Security constants
+const ALLOWED_IMAGE_TYPES = ['jpg', 'jpeg', 'png', 'webp'];
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 /**
  * Uploads an image to Supabase Storage and returns the public URL
  * @param uri Local file URI from ImagePicker
@@ -11,24 +16,16 @@ export const uploadImageToSupabase = async (
   bucket: string = 'product-images'
 ): Promise<string> => {
   try {
-    console.log('Starting image upload to Supabase...');
-    console.log('Bucket:', bucket);
-    console.log('Image URI:', uri);
+    // Validate file extension
+    const fileExt = uri.split('.').pop()?.toLowerCase() || '';
+
+    if (!fileExt || !ALLOWED_IMAGE_TYPES.includes(fileExt)) {
+      throw new Error(`Invalid file type. Only ${ALLOWED_IMAGE_TYPES.join(', ')} files are allowed.`);
+    }
 
     // Generate unique filename
-    const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `${fileName}`;
-
-    console.log('Generated filename:', fileName);
-
-    // For React Native, use FormData
-    const formData = new FormData();
-    formData.append('file', {
-      uri: uri,
-      type: `image/${fileExt}`,
-      name: fileName,
-    } as any);
 
     // Get Supabase upload URL
     const { data: { session } } = await supabase.auth.getSession();
@@ -37,16 +34,21 @@ export const uploadImageToSupabase = async (
       throw new Error('User is not authenticated. Please log in.');
     }
 
-    console.log('User is authenticated, uploading...');
-
-    // Try arrayBuffer for React Native compatibility
+    // Fetch file and validate size
     let fileData;
     try {
       const response = await fetch(uri);
       const arrayBuffer = await response.arrayBuffer();
       fileData = new Uint8Array(arrayBuffer);
-      console.log('File data created successfully, size:', fileData.length);
+
+      // Validate file size
+      if (fileData.length > MAX_FILE_SIZE_BYTES) {
+        throw new Error(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit. Please choose a smaller image.`);
+      }
     } catch (fileError) {
+      if (fileError instanceof Error) {
+        throw fileError;
+      }
       console.error('Failed to read file:', fileError);
       throw new Error('Failed to read image file');
     }
@@ -76,8 +78,6 @@ export const uploadImageToSupabase = async (
       .from(bucket)
       .getPublicUrl(filePath);
 
-    console.log('✅ Image uploaded successfully!');
-    console.log('Public URL:', publicUrlData.publicUrl);
     return publicUrlData.publicUrl;
   } catch (error) {
     console.error('❌ Image upload error:', error);
@@ -115,10 +115,8 @@ export const deleteImageFromSupabase = async (
       console.error('Error deleting image from Supabase:', error);
       throw new Error(`Failed to delete image: ${error.message}`);
     }
-
-    console.log('✅ Image deleted successfully');
   } catch (error) {
-    console.error('❌ Image deletion error:', error);
+    console.error('Image deletion error:', error);
     // Don't throw - deletion errors shouldn't block operations
   }
 };

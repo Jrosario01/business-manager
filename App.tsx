@@ -30,7 +30,7 @@ export default function App() {
   const { reset: resetShipments } = useShipmentsStore();
   const [migrationComplete, setMigrationComplete] = useState(false);
   const [hasShownLoginNotification, setHasShownLoginNotification] = useState(false);
-  const [remainingTime, setRemainingTime] = useState(60 * 60); // 60 minutes in seconds
+  const [remainingTime, setRemainingTime] = useState(2 * 60); // 2 minutes for testing (change back to 60 * 60 for production)
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Initialize exchange rate on app start
@@ -38,12 +38,20 @@ export default function App() {
     loadCachedRate();
   }, []);
 
+  // Check for existing session on app start
   useEffect(() => {
-    // Check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      await setSession(session);
-      setIsLoading(false);
-    });
+    async function checkSession() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        await setSession(session);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error checking session:', error);
+        setIsLoading(false);
+      }
+    }
+
+    checkSession();
 
     // Listen for auth changes
     const {
@@ -140,18 +148,45 @@ export default function App() {
     // Only show notification once per login
     if (hasShownLoginNotification) return;
 
-    // Show notification on login and start timer when user clicks OK
-    Alert.alert(
-      'Demo Session Started',
-      'You have 1 hour to explore the app. Your session will automatically expire.',
-      [{
-        text: 'OK',
-        onPress: () => {
-          setHasShownLoginNotification(true);
-        }
-      }]
-    );
+    // Small delay to ensure UI is ready, then show notification
+    const timer = setTimeout(() => {
+      Alert.alert(
+        'Demo Session Started',
+        'You have 2 minutes to explore the app. Your session will automatically expire. (Testing mode)',
+        [{
+          text: 'OK',
+          onPress: () => {
+            setHasShownLoginNotification(true);
+          }
+        }],
+        { cancelable: false } // Prevent dismissing by tapping outside
+      );
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, [session, user, hasShownLoginNotification]);
+
+  // Auto-refresh session every 25 minutes to prevent JWT expiry (keeps demo users logged in)
+  useEffect(() => {
+    if (!session || !isDemoAccount()) return;
+
+    const refreshSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data.session) {
+          await setSession(data.session);
+          console.log('🔄 Demo session refreshed automatically');
+        }
+      } catch (error) {
+        console.error('Error refreshing session:', error);
+      }
+    };
+
+    // Refresh session every 25 minutes (before 30-min JWT expiry)
+    const refreshInterval = setInterval(refreshSession, 25 * 60 * 1000);
+
+    return () => clearInterval(refreshInterval);
+  }, [session, setSession]);
 
   // Check session timeout every minute for demo accounts
   useEffect(() => {
@@ -182,27 +217,34 @@ export default function App() {
 
   // Trigger logout when timer reaches 0
   useEffect(() => {
-    if (remainingTime === 0 && session && isDemoAccount() && hasShownLoginNotification) {
-      const { logout } = useAuthStore.getState();
+    if (remainingTime === 0 && session && isDemoAccount() && hasShownLoginNotification && !isLoggingOut) {
+      // Show alert and wait for user to click OK before logging out
       Alert.alert(
         'Session Expired',
-        'Demo session has expired (1 hour limit)',
+        'Your demo session has expired (2 minute test limit). You will be logged out.',
         [{
           text: 'OK',
           onPress: async () => {
             setIsLoggingOut(true);
-            await logout();
-            setIsLoggingOut(false);
+            try {
+              const { logout } = useAuthStore.getState();
+              await logout();
+            } catch (error) {
+              console.error('Logout error:', error);
+            } finally {
+              setIsLoggingOut(false);
+            }
           }
-        }]
+        }],
+        { cancelable: false } // Prevent dismissing by tapping outside
       );
     }
-  }, [remainingTime, session, hasShownLoginNotification]);
+  }, [remainingTime, session, hasShownLoginNotification, isLoggingOut]);
 
   // Reset timer when logging out
   useEffect(() => {
     if (!session) {
-      setRemainingTime(60 * 60); // Reset to 60 minutes
+      setRemainingTime(2 * 60); // Reset to 2 minutes (change back to 60 * 60 for production)
     }
   }, [session]);
 

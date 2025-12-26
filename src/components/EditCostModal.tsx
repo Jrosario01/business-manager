@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useShipmentsStore } from '../store/shipmentsStore';
 import { supabase } from '../config/supabase';
@@ -162,16 +164,21 @@ export default function EditCostModal({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Edit Unit Cost</Text>
-            <TouchableOpacity onPress={onClose} disabled={isLoading}>
-              <Text style={[styles.closeButton, isLoading && styles.disabled]}>✕</Text>
-            </TouchableOpacity>
-          </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <View style={styles.modalContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Edit Unit Cost</Text>
+              <TouchableOpacity onPress={onClose} disabled={isLoading}>
+                <Text style={[styles.closeButton, isLoading && styles.disabled]}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-          <ScrollView style={styles.content}>
+            <ScrollView style={styles.content}>
             {/* Product Info */}
             <View style={styles.section}>
               <Text style={styles.productName}>{productName}</Text>
@@ -281,7 +288,8 @@ export default function EditCostModal({
               )}
             </TouchableOpacity>
           </View>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

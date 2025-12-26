@@ -13,6 +13,7 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
@@ -272,11 +273,16 @@ export default function AddProductModal({
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          style={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
+          <ScrollView
+            style={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
           {products.map((product, index) => {
             const brandSuggestions = getBrandSuggestions(product.brand);
 
@@ -471,6 +477,7 @@ export default function AddProductModal({
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Full Screen Loading Overlay */}
         {isSaving && (

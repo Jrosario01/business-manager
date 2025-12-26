@@ -4,8 +4,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import { supabase } from '../config/supabase';
 import { Profile } from '../types';
-import { isDemoAccount } from '../utils/isDemoAccount';
-import { clearDemoTables } from '../utils/clearDemoTables';
 
 interface AuthState {
   user: Profile | null;
@@ -27,7 +25,7 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       isLoading: true,
       sessionStartTime: null,
-      SESSION_TIMEOUT: 60 * 60 * 1000, // 1 hour in milliseconds
+      SESSION_TIMEOUT: 2 * 60 * 1000, // 2 minutes for testing (change back to 60 * 60 * 1000 for production)
 
       setUser: (user) => set({ user }),
 
@@ -80,18 +78,8 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        const { user } = get();
-
-        // If demo account, clear all demo tables before logging out
-        if (user?.email && isDemoAccount()) {
-          try {
-            await clearDemoTables();
-            console.log('✅ Demo data cleared on logout');
-          } catch (error) {
-            console.error('Error clearing demo tables:', error);
-            // Continue with logout even if cleanup fails
-          }
-        }
+        // Skip demo table clearing - just log out immediately
+        // This prevents timeout issues and makes logout instant
 
         // Sign out from Supabase
         await supabase.auth.signOut();

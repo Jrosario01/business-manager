@@ -12,6 +12,7 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -183,7 +184,12 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
           <View style={styles.headerButton} />
         </View>
 
-        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           {/* Customer Info */}
           <View style={styles.customerCard}>
             <View>
@@ -352,6 +358,7 @@ export default function UpdatePaymentModal({ visible, onClose, onSubmit, sale }:
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Payment Summary Footer */}
         <View style={styles.footer}>

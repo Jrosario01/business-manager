@@ -13,6 +13,7 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useProductsStore, SupabaseProduct as CatalogProduct } from '../store/productsStore';
@@ -437,7 +438,12 @@ export default function CreateSaleModal({
           <View style={styles.headerButton} />
         </View>
 
-        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
           {/* Customer Section */}
           <Text style={styles.sectionTitle}>{t('sales.customer')}</Text>
           <View style={styles.card}>
@@ -795,6 +801,7 @@ export default function CreateSaleModal({
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Complete Sale Button */}
         <View style={styles.completeSaleContainer}>

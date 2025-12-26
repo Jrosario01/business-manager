@@ -194,7 +194,9 @@ DROP VIEW IF EXISTS consolidated_inventory CASCADE;
 DROP VIEW IF EXISTS shipment_performance CASCADE;
 
 -- View for consolidated inventory (product totals across all shipments)
-CREATE VIEW consolidated_inventory AS
+-- SECURITY INVOKER ensures view uses permissions of querying user, not view creator
+CREATE VIEW consolidated_inventory
+WITH (security_invoker = true) AS
 SELECT
   p.id as product_id,
   p.brand,
@@ -210,7 +212,9 @@ WHERE p.active = true
 GROUP BY p.id, p.brand, p.name, p.size, p.image_url;
 
 -- View for shipment performance
-CREATE VIEW shipment_performance AS
+-- SECURITY INVOKER ensures view uses permissions of querying user, not view creator
+CREATE VIEW shipment_performance
+WITH (security_invoker = true) AS
 SELECT
   s.id,
   s.shipment_number,

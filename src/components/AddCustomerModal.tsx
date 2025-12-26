@@ -13,6 +13,7 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
@@ -202,7 +203,16 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
           </TouchableOpacity>
         </View>
 
-        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView
+            style={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+          >
           {/* Customer Info */}
           <Text style={styles.sectionTitle}>{t('modals.addCustomer.customerInfo')}</Text>
           <View style={styles.card}>
@@ -353,7 +363,8 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
           )}
 
           <View style={styles.bottomSpacer} />
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
 
         {/* Full Screen Loading Overlay for Saving */}
         {isSaving && (

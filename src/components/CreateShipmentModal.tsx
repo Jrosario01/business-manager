@@ -13,6 +13,7 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
@@ -67,12 +68,9 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
   // Get product suggestions based on search
   const getProductSuggestions = (index: number): any[] => {
     const query = searchQuery[index] || '';
-    console.log('getProductSuggestions - Query:', query);
-    console.log('getProductSuggestions - Catalog has', catalogProducts.length, 'products');
     if (!query || query.length < 2) return [];
 
     const results = searchProducts(query);
-    console.log('getProductSuggestions - Results:', results.length, 'products found');
     return results.slice(0, 10); // Limit to 10 results
   };
 
@@ -114,11 +112,6 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
   };
 
   const selectProduct = (index: number, catalogProduct: CatalogProduct) => {
-    console.log('==== selectProduct CALLED ====');
-    console.log('Index:', index);
-    console.log('Product:', catalogProduct);
-    console.log('Current products state:', products);
-
     const newProducts = [...products];
     const updatedProduct = {
       brand: catalogProduct.brand,
@@ -129,10 +122,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
       catalogProductId: catalogProduct.id,
     };
 
-    console.log('Updated product:', updatedProduct);
     newProducts[index] = updatedProduct;
-
-    console.log('New products array:', newProducts);
     setProducts(newProducts);
 
     // Clear search query when product is selected
@@ -141,7 +131,6 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
     setSearchQuery(newSearchQuery);
 
     setShowSuggestions(-1);
-    console.log('==== selectProduct DONE ====');
   };
 
   const clearProductSelection = (index: number) => {
@@ -318,7 +307,12 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+          >
+            <ScrollView style={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Total Shipping Section */}
             <Text style={styles.sectionTitle}>{t('modals.createShipment.totalShippingCost')}</Text>
             <View style={styles.card}>
@@ -379,9 +373,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                         }}
                         onBlur={() => {
                           // Delay to allow clicking suggestions
-                          console.log('Input blurred, hiding suggestions in 500ms...');
                           setTimeout(() => {
-                            console.log('Hiding suggestions now');
                             setShowSuggestions(-1);
                           }, 500);
                         }}
@@ -395,17 +387,11 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                             nestedScrollEnabled
                             keyboardShouldPersistTaps="always"
                           >
-                            {suggestions.map((catalogProduct) => {
-                              console.log('Rendering suggestion:', catalogProduct.brand, catalogProduct.name);
-                              return (
+                            {suggestions.map((catalogProduct) => (
                                 <TouchableOpacity
                                   key={catalogProduct.id}
                                   style={styles.suggestionItem}
-                                  onPressIn={() => {
-                                    console.log('PRESS IN suggestion:', catalogProduct.brand, catalogProduct.name);
-                                  }}
                                   onPress={() => {
-                                    console.log('PRESSED suggestion:', catalogProduct.brand, catalogProduct.name);
                                     selectProduct(index, catalogProduct);
                                   }}
                                   activeOpacity={0.7}
@@ -419,8 +405,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
                                     </Text>
                                   </View>
                                 </TouchableOpacity>
-                              );
-                            })}
+                            ))}
                           </ScrollView>
                           <TouchableOpacity
                             style={styles.addNewProductButton}
@@ -568,6 +553,7 @@ export default function CreateShipmentModal({ visible, onClose, onSubmit }: Crea
 
             <View style={styles.bottomSpacer} />
           </ScrollView>
+          </KeyboardAvoidingView>
 
           {/* Full Screen Loading Overlay */}
           {isSaving && (

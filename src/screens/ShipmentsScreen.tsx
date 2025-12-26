@@ -34,22 +34,27 @@ export default function ShipmentsScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        console.log('📦 ShipmentsScreen focused - loading shipments for user:', user.email);
         loadShipments();
-      } else {
-        console.log('📦 ShipmentsScreen focused - waiting for user to load');
       }
-      return () => {
-        console.log('📦 ShipmentsScreen unfocused');
-      };
     }, [user])
   );
 
   // Pull-to-refresh handler
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadShipments();
-    setRefreshing(false);
+    try {
+      // Add timeout to prevent infinite loading
+      await Promise.race([
+        loadShipments(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Load timeout')), 10000)
+        )
+      ]);
+    } catch (error) {
+      console.error('Error refreshing shipments:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleCreateShipment = async (shipmentData: any) => {

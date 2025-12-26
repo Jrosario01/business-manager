@@ -9,6 +9,8 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useExchangeRateStore } from '../store/exchangeRateStore';
 
@@ -113,16 +115,21 @@ export default function CurrencySettingsModal({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Currency Settings</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <View style={styles.modalContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>Currency Settings</Text>
+              <TouchableOpacity onPress={onClose}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-          <ScrollView style={styles.content}>
+            <ScrollView style={styles.content}>
             {/* Current Rate */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Current Exchange Rate</Text>
@@ -267,7 +274,8 @@ export default function CurrencySettingsModal({
               <Text style={styles.closeFooterButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

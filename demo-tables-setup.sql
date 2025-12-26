@@ -190,7 +190,9 @@ CREATE POLICY "Allow all for demo_sale_item_allocations" ON demo_sale_item_alloc
 -- =====================================================
 
 DROP VIEW IF EXISTS demo_consolidated_inventory;
-CREATE VIEW demo_consolidated_inventory AS
+-- SECURITY INVOKER ensures view uses permissions of querying user, not view creator
+CREATE VIEW demo_consolidated_inventory
+WITH (security_invoker = true) AS
 SELECT
   p.id,
   p.brand,

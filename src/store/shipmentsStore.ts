@@ -109,10 +109,8 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const tableName = getTableName('shipments');
-      console.log('📦 Loading shipments from table:', tableName);
-      console.log('📦 Is demo account:', isDemoAccount());
 
-      const { data: shipmentsData, error: shipmentsError } = await supabase
+      const { data: shipmentsData, error: shipmentsError} = await supabase
         .from(tableName)
         .select(`
           *,
@@ -130,9 +128,7 @@ export const useShipmentsStore = create<ShipmentsState>((set, get) => ({
             )
           )
         `)
-        .order('created_at', { ascending: false });
-
-      console.log('📦 Loaded shipments:', shipmentsData?.length || 0);
+        .order('created_at', { ascending: false});
 
       if (shipmentsError) {
         console.error('📦 Error loading shipments:', shipmentsError);
