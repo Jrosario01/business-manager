@@ -25,14 +25,17 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       isLoading: true,
       sessionStartTime: null,
-      SESSION_TIMEOUT: 2 * 60 * 1000, // 2 minutes for testing (change back to 60 * 60 * 1000 for production)
+      SESSION_TIMEOUT: 60 * 60 * 1000, // 1 hour for demo sessions
 
       setUser: (user) => set({ user }),
 
       setSession: async (session) => {
+        const currentSessionStartTime = get().sessionStartTime;
+
         set({
           session,
-          sessionStartTime: session ? Date.now() : null
+          // Only set sessionStartTime on initial login, not on refresh
+          sessionStartTime: session ? (currentSessionStartTime || Date.now()) : null
         });
 
         // Extract and set user from session
@@ -69,7 +72,7 @@ export const useAuthStore = create<AuthState>()(
         if (sessionStartTime && Date.now() - sessionStartTime > SESSION_TIMEOUT) {
           Alert.alert(
             'Session Expired',
-            'Demo session has expired (1 hour limit)',
+            'Your demo session has expired (1 hour limit). You will be logged out.',
             [{ text: 'OK', onPress: () => logout() }]
           );
           return true;
@@ -78,18 +81,26 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        // Skip demo table clearing - just log out immediately
-        // This prevents timeout issues and makes logout instant
+        try {
+          // Sign out from Supabase with timeout protection
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Logout timeout')), 5000)
+          );
 
-        // Sign out from Supabase
-        await supabase.auth.signOut();
-
-        // Clear local state
-        set({
-          user: null,
-          session: null,
-          sessionStartTime: null
-        });
+          await Promise.race([
+            supabase.auth.signOut(),
+            timeoutPromise
+          ]).catch(error => {
+            console.warn('Logout error (continuing anyway):', error);
+          });
+        } finally {
+          // Always clear local state even if signOut fails
+          set({
+            user: null,
+            session: null,
+            sessionStartTime: null
+          });
+        }
       },
     }),
     {

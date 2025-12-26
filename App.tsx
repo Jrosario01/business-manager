@@ -30,7 +30,7 @@ export default function App() {
   const { reset: resetShipments } = useShipmentsStore();
   const [migrationComplete, setMigrationComplete] = useState(false);
   const [hasShownLoginNotification, setHasShownLoginNotification] = useState(false);
-  const [remainingTime, setRemainingTime] = useState(2 * 60); // 2 minutes for testing (change back to 60 * 60 for production)
+  const [remainingTime, setRemainingTime] = useState(60 * 60); // 1 hour for demo sessions
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Initialize exchange rate on app start
@@ -166,9 +166,9 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [session, user, hasShownLoginNotification]);
 
-  // Auto-refresh session every 25 minutes to prevent JWT expiry (keeps demo users logged in)
+  // Auto-refresh session every 25 minutes to prevent JWT expiry (only for non-demo users)
   useEffect(() => {
-    if (!session || !isDemoAccount()) return;
+    if (!session || isDemoAccount()) return; // Skip demo accounts - let them expire naturally
 
     const refreshSession = async () => {
       try {
@@ -221,7 +221,7 @@ export default function App() {
       // Show alert and wait for user to click OK before logging out
       Alert.alert(
         'Session Expired',
-        'Your demo session has expired (2 minute test limit). You will be logged out.',
+        'Your demo session has expired (1 hour limit). You will be logged out.',
         [{
           text: 'OK',
           onPress: async () => {
@@ -244,7 +244,7 @@ export default function App() {
   // Reset timer when logging out
   useEffect(() => {
     if (!session) {
-      setRemainingTime(2 * 60); // Reset to 2 minutes (change back to 60 * 60 for production)
+      setRemainingTime(60 * 60); // Reset to 1 hour
     }
   }, [session]);
 
