@@ -111,7 +111,7 @@ export default function CatalogScreen() {
           <View style={[styles.priceBox, styles.saleBox]}>
             <Text style={[styles.priceLabel, styles.saleLabel]}>{t('catalog.sale')}</Text>
             <Text style={[styles.priceValue, styles.saleValue]}>
-              ${(product.sale_price || (product.cost * 2 * usdToDop)).toFixed(0)}
+              ${(product.sale_price || 0).toFixed(0)}
             </Text>
           </View>
         </View>
