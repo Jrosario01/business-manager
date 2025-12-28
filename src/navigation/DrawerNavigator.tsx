@@ -24,10 +24,16 @@ function CustomDrawerContent(props: any) {
   const logout = useAuthStore((state) => state.logout);
   const { t, i18n } = useTranslation();
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    logout();
+    if (isLoggingOut) return; // Prevent multiple clicks
+    setIsLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const handleLanguageChange = async (lang: string) => {

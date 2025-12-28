@@ -24,14 +24,17 @@ import DrawerNavigator from './src/navigation/DrawerNavigator';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
-  const { session, user, setSession, setIsLoading, isLoading, checkSessionTimeout } = useAuthStore();
+  const { session, user, setSession, setIsLoading, isLoading, logout } = useAuthStore();
   const { seedInitialProducts } = useProductsStore();
   const { loadCachedRate } = useExchangeRateStore();
   const { reset: resetShipments } = useShipmentsStore();
   const [migrationComplete, setMigrationComplete] = useState(false);
   const [hasShownLoginNotification, setHasShownLoginNotification] = useState(false);
+  const [isFreshLogin, setIsFreshLogin] = useState(false);
   const [remainingTime, setRemainingTime] = useState(60 * 60); // 1 hour for demo sessions
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [demoSessionStartTime, setDemoSessionStartTime] = useState<number | null>(null);
+  const [hasShownExpiryAlert, setHasShownExpiryAlert] = useState(false);
 
   // Initialize exchange rate on app start
   useEffect(() => {
@@ -43,6 +46,55 @@ export default function App() {
     async function checkSession() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+
+        // LOG JWT EXPIRY TIME
+        if (session?.expires_at) {
+          const expiryDate = new Date(session.expires_at * 1000);
+          const now = new Date();
+          const minutesUntilExpiry = (expiryDate.getTime() - now.getTime()) / 1000 / 60;
+          console.log('🔐 JWT expires at:', expiryDate.toLocaleString());
+          console.log('🔐 Minutes until expiry:', Math.floor(minutesUntilExpiry));
+          console.log('🔐 Total JWT duration (seconds):', session.expires_in);
+        }
+
+        // CRITICAL: Check if demo session is expired
+        if (session?.user?.email === 'gjessencedemo@proton.me' || session?.user?.email === 'demo@gandjessence.com') {
+          console.log('🔍 Demo account detected on app start - checking session expiry');
+
+          // Fetch demo_session_started_at from database
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('demo_session_started_at')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profile?.demo_session_started_at) {
+            const sessionStart = new Date(profile.demo_session_started_at).getTime();
+            const now = Date.now();
+            const elapsed = now - sessionStart;
+            const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour for demo sessions
+
+            console.log('⏱️ Demo session age:', Math.floor(elapsed / 1000 / 60), 'minutes');
+
+            if (elapsed >= SESSION_TIMEOUT) {
+              console.log('🚫 Demo session EXPIRED - forcing logout on app start');
+              // Clear the session immediately
+              await supabase.auth.signOut();
+              setIsLoading(false);
+              return;
+            } else {
+              console.log('✅ Demo session still valid');
+              // Set the start time in memory for the timer
+              setDemoSessionStartTime(sessionStart);
+            }
+          } else {
+            console.log('⚠️ No demo session start time found - logging out');
+            await supabase.auth.signOut();
+            setIsLoading(false);
+            return;
+          }
+        }
+
         await setSession(session);
         setIsLoading(false);
       } catch (error) {
@@ -56,8 +108,25 @@ export default function App() {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      await setSession(session);
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔑 Auth event:', event);
+
+      // LOG JWT EXPIRY on every auth change
+      if (session?.expires_at) {
+        const expiryDate = new Date(session.expires_at * 1000);
+        const now = new Date();
+        const minutesUntilExpiry = (expiryDate.getTime() - now.getTime()) / 1000 / 60;
+        console.log('🔐 JWT expires at:', expiryDate.toLocaleString());
+        console.log('🔐 Minutes until expiry:', Math.floor(minutesUntilExpiry));
+        console.log('🔐 Total JWT duration (seconds):', session.expires_in);
+      } else {
+        console.log('⚠️ Session has no expires_at!');
+      }
+
+      // Detect fresh login vs session restore
+      const isNewLogin = event === 'SIGNED_IN';
+      setIsFreshLogin(isNewLogin);
+      await setSession(session, isNewLogin);
       setIsLoading(false);
     });
 
@@ -134,25 +203,33 @@ export default function App() {
   //   autoSeedProducts();
   // }, [session]);
 
-  // Demo account: Show login notification and set up timeout checker
+  // Demo account: Show login notification and start timer on fresh login
   useEffect(() => {
     // Wait for both session and user to be set
     if (!session || !user || !isDemoAccount()) {
-      // Reset notification flag when logged out
+      // Reset flags when logged out
       if (!session) {
         setHasShownLoginNotification(false);
+        setIsFreshLogin(false);
+        setDemoSessionStartTime(null);
+        setHasShownExpiryAlert(false);
       }
       return;
     }
 
-    // Only show notification once per login
-    if (hasShownLoginNotification) return;
+    // Only show notification on FRESH login, not session restore
+    if (hasShownLoginNotification || !isFreshLogin) return;
+
+    // Set session start time in memory
+    const startTime = Date.now();
+    setDemoSessionStartTime(startTime);
+    console.log('⏱️ Demo session started at:', new Date(startTime).toLocaleString());
 
     // Small delay to ensure UI is ready, then show notification
     const timer = setTimeout(() => {
       Alert.alert(
         'Demo Session Started',
-        'You have 2 minutes to explore the app. Your session will automatically expire. (Testing mode)',
+        'You have 1 hour to explore the app. Your session will automatically expire after 1 hour.',
         [{
           text: 'OK',
           onPress: () => {
@@ -164,11 +241,11 @@ export default function App() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [session, user, hasShownLoginNotification]);
+  }, [session, user, hasShownLoginNotification, isFreshLogin]);
 
-  // Auto-refresh session every 25 minutes to prevent JWT expiry (only for non-demo users)
+  // Auto-refresh session every 25 minutes to prevent JWT expiry (only for regular users)
   useEffect(() => {
-    if (!session || isDemoAccount()) return; // Skip demo accounts - let them expire naturally
+    if (!session || isDemoAccount()) return; // Skip demo - let JWT expire at 1 hour
 
     const refreshSession = async () => {
       try {
@@ -188,58 +265,57 @@ export default function App() {
     return () => clearInterval(refreshInterval);
   }, [session, setSession]);
 
-  // Check session timeout every minute for demo accounts
+  // Simple countdown timer for demo accounts - uses memory (no DB queries)
   useEffect(() => {
-    if (!session || !isDemoAccount()) return;
+    if (!session || !user || !isDemoAccount() || !demoSessionStartTime) {
+      return;
+    }
 
-    const timeoutChecker = setInterval(() => {
-      checkSessionTimeout();
-    }, 60 * 1000); // Check every minute
+    const updateTimer = () => {
+      const now = Date.now();
+      const elapsed = now - demoSessionStartTime;
+      const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour for demo sessions
+      const secondsLeft = Math.max(0, Math.floor((SESSION_TIMEOUT - elapsed) / 1000));
+      setRemainingTime(secondsLeft);
+    };
 
-    return () => clearInterval(timeoutChecker);
-  }, [session, checkSessionTimeout]);
+    // Update immediately
+    updateTimer();
 
-  // Countdown timer for demo accounts (starts after notification is dismissed)
-  useEffect(() => {
-    if (!session || !isDemoAccount() || !hasShownLoginNotification) return;
-
-    const timer = setInterval(() => {
-      setRemainingTime((prevTime) => {
-        if (prevTime <= 0) {
-          return 0;
-        }
-        return prevTime - 1;
-      });
-    }, 1000); // Update every second
+    // Then update every second
+    const timer = setInterval(updateTimer, 1000);
 
     return () => clearInterval(timer);
-  }, [session, hasShownLoginNotification]);
+  }, [session, user, demoSessionStartTime]);
 
-  // Trigger logout when timer reaches 0
+  // Logout immediately when timer reaches 0
   useEffect(() => {
-    if (remainingTime === 0 && session && isDemoAccount() && hasShownLoginNotification && !isLoggingOut) {
-      // Show alert and wait for user to click OK before logging out
+    if (remainingTime === 0 && session && isDemoAccount() && !isLoggingOut && !hasShownExpiryAlert) {
+      console.log('⏰ Timer expired - showing logout alert');
+      setHasShownExpiryAlert(true); // Prevent alert from showing again
+
       Alert.alert(
         'Session Expired',
         'Your demo session has expired (1 hour limit). You will be logged out.',
         [{
           text: 'OK',
           onPress: async () => {
-            setIsLoggingOut(true);
+            console.log('🚪 User clicked OK - starting logout');
+            setIsLoggingOut(true); // Show modal AFTER user clicks OK
             try {
-              const { logout } = useAuthStore.getState();
               await logout();
+              console.log('✅ Demo user logged out successfully');
             } catch (error) {
-              console.error('Logout error:', error);
+              console.error('❌ Logout error:', error);
             } finally {
               setIsLoggingOut(false);
             }
           }
         }],
-        { cancelable: false } // Prevent dismissing by tapping outside
+        { cancelable: false }
       );
     }
-  }, [remainingTime, session, hasShownLoginNotification, isLoggingOut]);
+  }, [remainingTime, session, isLoggingOut, hasShownExpiryAlert]);
 
   // Reset timer when logging out
   useEffect(() => {
@@ -276,7 +352,7 @@ export default function App() {
         </Stack.Navigator>
 
         {/* Floating timer button for demo accounts */}
-        {session && isDemoAccount() && hasShownLoginNotification && (
+        {session && isDemoAccount() && (
           <View style={styles.floatingTimerContainer}>
             <TouchableOpacity style={styles.floatingTimer} activeOpacity={0.9}>
               <Text style={styles.timerIcon}>⏱️</Text>

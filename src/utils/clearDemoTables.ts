@@ -14,10 +14,10 @@ export const clearDemoTables = async () => {
   try {
     console.log('🧹 Clearing user-added demo data...');
 
-    // Step 1: Truncate all demo tables (with 5 second timeout)
+    // Step 1: Truncate all demo tables (with 30 second timeout)
     const { error: truncateError } = await withTimeout(
       supabase.rpc('truncate_demo_tables'),
-      5000
+      30000
     );
 
     if (truncateError) {
@@ -27,12 +27,12 @@ export const clearDemoTables = async () => {
 
     console.log('✅ Demo tables truncated');
 
-    // Step 2: Re-seed initial demo data (with 5 second timeout)
+    // Step 2: Re-seed initial demo data (with 30 second timeout)
     console.log('🌱 Re-seeding initial demo data...');
 
     const { error: reseedError } = await withTimeout(
       supabase.rpc('reseed_demo_data'),
-      5000
+      30000
     );
 
     if (reseedError) {
