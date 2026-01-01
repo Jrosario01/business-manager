@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import * as Contacts from 'expo-contacts';
 import { useProductsStore, Product as CatalogProduct } from '../store/productsStore';
 import { useSalesStore } from '../store/salesStore';
 
@@ -44,6 +45,8 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isFieldsLocked, setIsFieldsLocked] = useState(false);
+  const [isImportingContact, setIsImportingContact] = useState(false);
 
   // Get customer's purchase history
   const customerSales = isEdit && customerId
@@ -115,6 +118,8 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
     setWishlistInput('');
     setWishlist([]);
     setShowSuggestions(false);
+    setIsFieldsLocked(false);
+    setIsImportingContact(false);
   };
 
   const handleCancel = () => {
@@ -181,6 +186,75 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
     setPhone(formatted);
   };
 
+  const handleAddFromContacts = async () => {
+    try {
+      setIsImportingContact(true);
+
+      // Request permissions
+      const { status } = await Contacts.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          t('common.error'),
+          t('modals.addCustomer.contactsPermissionDenied')
+        );
+        setIsImportingContact(false);
+        return;
+      }
+
+      // Present contact picker
+      const contact = await Contacts.presentContactPickerAsync();
+
+      if (contact) {
+        // Get first name and last name
+        const firstName = contact.firstName || '';
+        const lastName = contact.lastName || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+
+        // Get phone number
+        const phoneNumber = contact.phoneNumbers && contact.phoneNumbers.length > 0
+          ? contact.phoneNumbers[0].number || ''
+          : '';
+
+        // Populate fields
+        if (fullName) {
+          setName(fullName);
+        }
+        if (phoneNumber) {
+          // Remove all non-digits first
+          const cleaned = phoneNumber.replace(/\D/g, '');
+
+          // If it starts with 1 and has 11 digits (US format with country code), remove the 1
+          const withoutCountryCode = cleaned.startsWith('1') && cleaned.length === 11
+            ? cleaned.substring(1)
+            : cleaned;
+
+          const formatted = formatPhoneNumber(withoutCountryCode);
+          setPhone(formatted);
+        }
+
+        // Lock fields and show success
+        setIsFieldsLocked(true);
+
+        Alert.alert(
+          t('common.success'),
+          t('modals.addCustomer.contactImported')
+        );
+      }
+    } catch (error) {
+      console.error('Error importing contact:', error);
+      Alert.alert(
+        t('common.error'),
+        t('modals.addCustomer.contactImportFailed')
+      );
+    } finally {
+      setIsImportingContact(false);
+    }
+  };
+
+  const handleUnlockFields = () => {
+    setIsFieldsLocked(false);
+  };
+
   const suggestions = getProductSuggestions();
 
   return (
@@ -215,23 +289,66 @@ export default function AddCustomerModal({ visible, onClose, onSubmit, initialDa
           >
           {/* Customer Info */}
           <Text style={styles.sectionTitle}>{t('modals.addCustomer.customerInfo')}</Text>
-          <View style={styles.card}>
-            <Text style={styles.label}>{t('modals.addCustomer.fullName')}</Text>
+          <View style={[styles.card, isFieldsLocked && styles.cardImported]}>
+            {/* Add from Contacts Button - Moved to TOP */}
+            {!isFieldsLocked && !isEdit && (
+              <TouchableOpacity
+                onPress={handleAddFromContacts}
+                style={styles.contactsButton}
+                disabled={isImportingContact}
+              >
+                {isImportingContact ? (
+                  <>
+                    <ActivityIndicator size="small" color="#1a5490" />
+                    <Text style={styles.contactsButtonTextLoading}>
+                      {t('modals.addCustomer.importingContact')}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.contactsButtonIcon}>👤</Text>
+                    <Text style={styles.contactsButtonText}>
+                      {t('modals.addCustomer.addFromContacts')}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {isFieldsLocked && (
+              <View style={styles.importedBadge}>
+                <Text style={styles.importedBadgeIcon}>✓</Text>
+                <Text style={styles.importedBadgeText}>
+                  {t('modals.addCustomer.importedFromContacts')}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.fieldHeader}>
+              <Text style={styles.label}>{t('modals.addCustomer.fullName')}</Text>
+              {isFieldsLocked && (
+                <TouchableOpacity onPress={handleUnlockFields} style={styles.editButton}>
+                  <Text style={styles.editButtonText}>{t('common.edit')}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <TextInput
-              style={styles.input}
+              style={[styles.input, isFieldsLocked && styles.inputLocked]}
               placeholder={t('modals.addCustomer.namePlaceholder')}
               value={name}
               onChangeText={setName}
+              editable={!isFieldsLocked}
             />
 
             <Text style={styles.label}>{t('modals.addCustomer.phoneNumber')}</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, isFieldsLocked && styles.inputLocked]}
               placeholder={t('modals.addCustomer.phonePlaceholder')}
               value={phone}
               onChangeText={handlePhoneChange}
               keyboardType="phone-pad"
               maxLength={12}
+              editable={!isFieldsLocked}
             />
             <Text style={styles.helperText}>
               {t('modals.addCustomer.phoneHelper')}
@@ -524,6 +641,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  cardImported: {
+    backgroundColor: '#E8F5E9',
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
@@ -539,10 +661,79 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },
+  inputLocked: {
+    backgroundColor: '#e8e8e8',
+    color: '#666',
+  },
   helperText: {
     fontSize: 12,
     color: '#1a5490',
     marginTop: 6,
+    fontWeight: '600',
+  },
+  fieldHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  editButton: {
+    backgroundColor: '#1a5490',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 7,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  contactsButton: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#1a5490',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  contactsButtonIcon: {
+    fontSize: 20,
+  },
+  contactsButtonText: {
+    color: '#1a5490',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  contactsButtonTextLoading: {
+    color: '#1a5490',
+    fontSize: 15,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  importedBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  importedBadgeIcon: {
+    fontSize: 18,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  importedBadgeText: {
+    color: '#2E7D32',
+    fontSize: 14,
     fontWeight: '600',
   },
   suggestionsContainer: {

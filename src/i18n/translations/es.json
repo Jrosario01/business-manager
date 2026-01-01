@@ -399,7 +399,13 @@
       "deleteCustomer": "Eliminar Cliente",
       "deleteConfirm": "¿Estás seguro de que deseas eliminar este cliente? Esta acción no se puede deshacer.",
       "enterName": "Por favor ingresa el nombre del cliente",
-      "enterPhone": "Por favor ingresa el número de teléfono"
+      "enterPhone": "Por favor ingresa el número de teléfono",
+      "addFromContacts": "Agregar desde Contactos",
+      "contactsPermissionDenied": "Se requiere permiso de contactos para importar datos del cliente.",
+      "contactImported": "¡Información del contacto importada exitosamente!",
+      "contactImportFailed": "Error al importar contacto. Por favor intenta de nuevo.",
+      "importingContact": "Importando contacto...",
+      "importedFromContacts": "Importado desde Contactos"
     },
     "createShipment": {
       "atLeastOne": "Debes tener al menos un producto",

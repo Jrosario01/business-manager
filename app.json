@@ -4,7 +4,7 @@
     "slug": "business-manager",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "description": "Business management app for perfume inventory, sales, and shipment tracking",
     "runtimeVersion": {
@@ -23,11 +23,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jrosario01.businessmanager"
+      "bundleIdentifier": "com.jrosario01.businessmanager",
+      "infoPlist": {
+        "NSContactsUsageDescription": "This app needs access to your contacts to help you quickly add customer information."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#1a5490"
       },
       "package": "com.jrosario01.businessmanager",

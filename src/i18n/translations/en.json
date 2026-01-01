@@ -399,7 +399,13 @@
       "deleteCustomer": "Delete Customer",
       "deleteConfirm": "Are you sure you want to delete this customer? This action cannot be undone.",
       "enterName": "Please enter customer name",
-      "enterPhone": "Please enter phone number"
+      "enterPhone": "Please enter phone number",
+      "addFromContacts": "Add from Contacts",
+      "contactsPermissionDenied": "Contacts permission is required to import customer data.",
+      "contactImported": "Contact information imported successfully!",
+      "contactImportFailed": "Failed to import contact. Please try again.",
+      "importingContact": "Importing contact...",
+      "importedFromContacts": "Imported from Contacts"
     },
     "createShipment": {
       "atLeastOne": "You must have at least one product",

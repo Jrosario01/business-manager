@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { DrawerContentScrollView, DrawerItemList, DrawerItem } from '@react-navigation/drawer';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { changeLanguage } from '../i18n/i18n';
 
@@ -50,8 +50,13 @@ function CustomDrawerContent(props: any) {
       <DrawerContentScrollView {...props}>
         {/* Header */}
         <View style={styles.drawerHeader}>
-          <Text style={styles.appName}>G & J Essence</Text>
-          <Text style={styles.appSubtitle}>Perfume Business</Text>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
         </View>
 
         {/* Main menu items */}
@@ -232,11 +237,29 @@ export default function DrawerNavigator() {
 const styles = StyleSheet.create({
   drawerHeader: {
     padding: 24,
-    backgroundColor: '#e0cf80',
-    borderBottomWidth: 2,
-    borderBottomColor: '#1a5490',
+    backgroundColor: 'transparent',
     marginBottom: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    overflow: 'hidden',
+    width: 220,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logo: {
+    width: 280,
+    height: 140,
   },
   appName: {
     fontSize: 28,
